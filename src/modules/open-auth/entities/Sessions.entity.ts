@@ -4,6 +4,16 @@ import { AccountUser, AccountsDocument } from './Accounts.entity';
 import { SessionSigs } from '@lit-protocol/types';
 
 @Schema()
+export class AccessControlConditions {
+  @Prop({ required: true })
+  agent: string;
+
+  @Prop({ required: true })
+  origin: string;
+}
+
+
+@Schema()
 export class Sessions {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Accounts' }) // Reference to the User entity
   accountId: AccountsDocument;
@@ -25,6 +35,9 @@ export class Sessions {
 
   @Prop({ required: true, unique: true })
   session_identifier: string;
+
+  @Prop({ required: true, type: AccessControlConditions })
+  accessControlConditions: AccessControlConditions;
 
   @Prop({ required: true })
   apiKeyId: string;

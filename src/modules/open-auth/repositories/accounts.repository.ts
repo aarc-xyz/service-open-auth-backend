@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { ServiceError } from '../utils/types.interfaces';
+import { ServiceError } from '../common/types';
 import { Accounts, AccountsDocument } from '../entities/Accounts.entity';
 import {
   ExternalWallet,

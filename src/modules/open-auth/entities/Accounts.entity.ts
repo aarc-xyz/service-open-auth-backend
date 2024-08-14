@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
-import { AccountType } from '../utils/types.interfaces';
+import { AccountType } from '../common/types';
 
 @Schema()
 export class AccountUser {

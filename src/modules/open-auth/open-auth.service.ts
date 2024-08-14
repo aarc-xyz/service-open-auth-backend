@@ -4,25 +4,22 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ethers } from 'ethers';
 import { OTPsEmailLoginOrCreateResponse } from 'stytch';
 import { v4 } from 'uuid';
-import { ServiceError } from './utils/types.interfaces';
+import { sign, verify } from 'jsonwebtoken';
+import { ServiceError } from './common/types';
 import {
-  customAuthMethod,
-  deconstructSessionSigs,
+  deconstructSessionSigs, generateAuthConditions,
   generateLitKeyId,
-  reconstructSessionSigs,
-} from './utils/helper-functions';
-import { MESSAGES, RESPONSE_CODES } from './utils/response.messages';
-import { FarcasterClient } from './client/Farcaster.client';
-import { TwitterClient } from './client/Twitter.client';
-import { TelegramClient } from './client/Telegram.client';
-import { LitClient } from './client/Lit.client';
-import { StytchClient } from './client/Stytch.client';
+  reconstructSessionSigs
+} from "./common/helpers";
+import { MESSAGES, RESPONSE_CODES } from './common/response.messages';
+import { TwitterAuthProvider } from './authProviders/Twitter.authProvider';
+import { LitClient } from './clients/Lit.client';
+import { StytchClient } from './clients/Stytch.client';
 import {
   ClaimAccountDto,
   ExternalWalletDto,
-  GetPubKeyDto,
-  ResolveAccountDto,
-} from './dto/Accounts.dto';
+  GetPubKeyDto, RegisterWebAuthnDto
+} from "./dto/Accounts.dto";
 import { PollSession, SessionKeyDto } from './dto/Sessions.dto';
 import {
   SignerDto,
@@ -31,17 +28,14 @@ import {
 } from './dto/Transactions.dto';
 import { Accounts, AccountUser } from './entities/Accounts.entity';
 import { PkpTransactionDocument } from './entities/PkpTransaction.entity';
-import { SessionsDocument } from './entities/Sessions.entity';
+import { AccessControlConditions, SessionsDocument } from "./entities/Sessions.entity";
 import { AccountsRepository } from './repositories/accounts.repository';
 import { PkpTransactionsRepository } from './repositories/pkptransactions.repository';
 import { SessionsRepository } from './repositories/sessions.repository';
 import {
   TIMESTAMP_REGEX,
-  TWILIO_ACCOUNT_SECRET_AUTH_TOKEN,
-  TWILIO_ACCOUNT_SID,
-  TWILIO_AUTH_BASE_URL,
-  TWILIO_SERVICE_ID, ZERO_ADDRESS,
-} from './utils/constants';
+  ZERO_ADDRESS,
+} from './common/constants';
 import {
   AccountType,
   AccountUserData,
@@ -50,24 +44,130 @@ import {
   PkpTransactionData,
   Provider,
   TransactionStatus,
-} from './utils/types.interfaces';
+} from './common/types';
 import { NonceUsedRepository } from './repositories/nonce.repository';
+import { AuthProvidersDto } from "./dto/AuthProviders.dto";
+import { NativeAuthClient } from "./clients/NativeAuth.client";
+import { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/types";
+import { WebAuthnProvider } from "./authProviders/Webauthn.authProvider";
+import { Request } from "express";
+import { TwilioAuthProvider } from "./authProviders/Twilio.authProvider";
+import { PlatformAuthClient } from "./clients/PlatformAuth.client";
 
 @Injectable()
 export class OpenAuthService {
   private readonly logger = new Logger(OpenAuthService.name);
   constructor(
     private readonly litClient: LitClient,
+    private readonly platformAuthClient: PlatformAuthClient,
+    private readonly nativeAuthClient: NativeAuthClient,
     private readonly stytchClient: StytchClient,
-    private readonly farcasterClient: FarcasterClient,
-    private readonly twitterClient: TwitterClient,
-    private readonly telegramClient: TelegramClient,
+    private readonly twilioAuthProvider: TwilioAuthProvider,
+    private readonly webAuthnClient: WebAuthnProvider,
+    private readonly twitterClient: TwitterAuthProvider,
     private readonly accountsRepository: AccountsRepository,
     private readonly sessionsRepository: SessionsRepository,
     private readonly pkpTxnRepository: PkpTransactionsRepository,
     private readonly nonceRepository: NonceUsedRepository,
   ) {
     this.litClient.close();
+  }
+
+  async addCredentials(
+    addAuthProviderDto: AuthProvidersDto,
+    keyHash: string,
+  ): Promise<void> {
+    try {
+      await this.nativeAuthClient.registerCredentials(
+        addAuthProviderDto.provider,
+        keyHash,
+        addAuthProviderDto.credentials,
+      );
+    } catch (error) {
+      this.logger.error('Error in adding native provider', error);
+      throw new ServiceError('Error in adding native provider', error);
+    }
+  }
+
+  async getClientCallbackUrl(
+    provider: Provider,
+    keyHash: string,
+    state?: string
+  ): Promise<{
+    hasNativeAuth: boolean;
+    callbackUrl: string;
+  }> {
+    try {
+      return await this.nativeAuthClient.getCallbackUrl(provider, keyHash, state);
+    } catch (error) {
+      this.logger.error('Error in getting client callback url', error);
+      throw new ServiceError('Error in getting client callback url', error);
+    }
+  }
+
+  async generateWebAuthnRegistrationOpts(
+    req: Request,
+    sessionIdentifier: string,
+  ): Promise<PublicKeyCredentialCreationOptionsJSON> {
+    try {
+      const session = await this.sessionsRepository.findOne({
+        session_identifier: sessionIdentifier,
+      });
+
+      if (!session) {
+        throw new ServiceError('Session not found');
+      }
+
+      if (!session.polled) {
+        throw new ServiceError('Session not polled');
+      }
+
+      // check if session is expired
+      if (session.expiresAt < new Date()) {
+        throw new ServiceError('Session expired');
+      }
+
+      const primary_contact = session.user.primary_contact;
+
+      const existingAccount = await this.accountsRepository.findOneByKey(
+        'user.primary_contact',
+        primary_contact,
+      );
+      if (!existingAccount) {
+        throw new ServiceError('Account does not exists');
+      }
+
+      return await this.webAuthnClient.generateUserRegistrationOptions(
+        req.headers.origin,
+        primary_contact,
+        session.wallet_address,
+      );
+    } catch (error) {
+      this.logger.error('Error in generating registration options', error);
+      throw new ServiceError('Error in generating registration options', error);
+    }
+  }
+
+  async registerWithWebAuthn(
+    req: Request,
+    webAuthnDto: RegisterWebAuthnDto,
+  ): Promise<boolean> {
+    try {
+      const existingAccount = await this.accountsRepository.findOneByKey(
+        'pkpAddress',
+        webAuthnDto.wallet_address,
+      );
+      if (!existingAccount) {
+        throw new ServiceError('Account does not exist');
+      }
+      return await this.webAuthnClient.verifyRegistration(
+        req.headers.origin,
+        webAuthnDto,
+      );
+    } catch (error) {
+      this.logger.error('Error in registering webauthn', error);
+      throw new ServiceError('Error in registering webauthn', error);
+    }
   }
 
   async authenticateLitSession(
@@ -93,63 +193,6 @@ export class OpenAuthService {
       }
     }
     return authMethodResponse;
-  }
-
-  async resolveAccount(
-    resolveAccount: ResolveAccountDto[],
-  ): Promise<string[] | null> {
-    await this.litClient.init();
-    const pkpAddresses: string[] = [];
-    const accounts: Accounts[] = [];
-    for (const accountdto of resolveAccount) {
-      if (!accountdto.provider) continue;
-      try {
-        const primary_contact = accountdto.primary_contact;
-
-        const existingAccount = await this.accountsRepository.findOneByKey(
-          'user.primary_contact',
-          primary_contact,
-        );
-        if (existingAccount && existingAccount.pkpAddress) {
-          pkpAddresses.push(existingAccount.pkpAddress);
-          continue;
-        }
-        const userId = v4();
-        const keyId = generateLitKeyId(userId);
-        const cfaPKPResponse = await this.litClient.computeCFAFromUserID(keyId);
-
-        const resolvedUser: AccountUser = {
-          first_name: null,
-          last_name: null,
-          middle_name: null,
-          primary_contact: primary_contact,
-        };
-
-        const resolvedAccount: Accounts = {
-          authProvider: accountdto.provider,
-          litAuthId: undefined,
-          pkpAddress: cfaPKPResponse.ethAddress,
-          publicKey: `0x${cfaPKPResponse.publicKey}`,
-          user: resolvedUser,
-          keyId: cfaPKPResponse.keyId,
-          userId,
-          tokenId: null,
-          claimed: false,
-          accountType: AccountType.RESOLVED,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        };
-        pkpAddresses.push(cfaPKPResponse.ethAddress);
-        accounts.push(resolvedAccount);
-      } catch (error) {
-        pkpAddresses.push('error');
-        continue;
-      }
-    }
-    if (accounts.length > 0) {
-      await this.accountsRepository.createAccounts(accounts);
-    }
-    return pkpAddresses;
   }
 
   async claimAccount(claimAccountDto: ClaimAccountDto): Promise<{
@@ -193,8 +236,9 @@ export class OpenAuthService {
     userAccountId: string,
     pkpPublicAddress: string,
     signingPermissions: PkpSigningPermissions,
+    accessControlConditions: AccessControlConditions,
     authMethodObject?: AuthMethodResponseObject,
-  ): Promise<void> {
+  ): Promise<SessionSigs> {
     await this.litClient.init();
     const existingSession = await this.sessionsRepository.findOne({
       session_identifier: sessionKeyDto.session_identifier,
@@ -203,15 +247,15 @@ export class OpenAuthService {
     });
     if (existingSession) {
       this.logger.log(existingSession);
-      return;
+      return existingSession._id as SessionSigs;
     }
 
     const authMethodResponse = authMethodObject
       ? authMethodObject
       : await this.authenticateLitSession(
-          sessionKeyDto.authKey,
-          sessionKeyDto.provider,
-        );
+        sessionKeyDto.authKey,
+        sessionKeyDto.provider,
+      );
 
     let sessionSig;
 
@@ -245,7 +289,7 @@ export class OpenAuthService {
       profile_picture_url: authMethodObject.profile_picture_url,
     };
 
-    await this.sessionsRepository.createSession(
+    const dbResponse = await this.sessionsRepository.createSession(
       sessionSig,
       sessionUser,
       new Date(sessionKeyDto.expiration),
@@ -253,8 +297,9 @@ export class OpenAuthService {
       sessionKeyDto.session_identifier,
       sessionKeyDto.apiKeyId,
       ethers.utils.computeAddress(pkpPublicAddress),
+      accessControlConditions,
     );
-    return;
+    return sessionSig;
   }
 
   async validateSigner(signerDto: SignerDto): Promise<PKPEthersWallet> {
@@ -269,24 +314,34 @@ export class OpenAuthService {
           wallet_address: signerDto.wallet_address,
         });
 
-      let sessionSig: SessionSigs;
+      let sessionSig: SessionSigs = sessionSigDocument.sessionSigs;
       if (sessionSigDocument) {
         if (sessionSigDocument.expiresAt < new Date()) {
           throw new ServiceError('Session expired');
         }
 
-        sessionSig = reconstructSessionSigs(
-          signerDto.sessionKey,
-          sessionSigDocument.sessionSigs,
-        );
+        try {
+          const accessConditions: AccessControlConditions =
+            sessionSigDocument.accessControlConditions;
+          const jwtKey: string = generateAuthConditions(accessConditions);
+          const decodedSessionKey = verify(signerDto.sessionKey, jwtKey);
+          const clientKey = decodedSessionKey['clientKey'];
+
+          sessionSig = reconstructSessionSigs(
+            clientKey.toString(),
+            sessionSigDocument.sessionSigs,
+          );
+        } catch (error) {
+          throw new ServiceError('Invalid session key');
+        }
       } else {
         throw new ServiceError("Session doesn't exist for this user");
       }
-
       const existingAccount = await this.accountsRepository.findOneByKey(
         '_id',
         sessionSigDocument.accountId._id as string,
       );
+
       if (!existingAccount) {
         throw new ServiceError('Account does not exist');
       }
@@ -407,223 +462,32 @@ export class OpenAuthService {
   async authenticate(
     getPubKeysDto: GetPubKeyDto,
     apiKeyHash: string,
+    request: Request
   ): Promise<string> {
     try {
       const start_time = performance.now();
       await this.litClient.init();
 
-      //shift this outside this function
-      let authMethodResponse: AuthMethodResponseObject = {
-        authMethod: {
-          authMethodType: null,
-          accessToken: null,
-        },
-        authId: null,
-        primary_contact: null,
-        user: null,
-        profile_picture_url: null,
-      };
+      let authMethodResponse: AuthMethodResponseObject;
 
-      switch (getPubKeysDto.provider) {
-        case Provider.EMAIL: {
-          if (getPubKeysDto.code && getPubKeysDto.method_id) {
-            const sessionResponse = await this.stytchClient.validateEmailOTP(
-              getPubKeysDto.code,
-              getPubKeysDto.method_id,
-            );
-            authMethodResponse =
-              await this.litClient.generateProviderAuthMethod(
-                sessionResponse.session_jwt,
-              );
-            authMethodResponse['primary_contact'] =
-              sessionResponse?.user?.emails[0]?.email;
-            authMethodResponse['user'] = { ...sessionResponse?.user?.name };
-          } else {
-            throw new ServiceError('Method Id or email OTP not passed');
-          }
-          break;
-        }
-        case Provider.SMS: {
-          if (getPubKeysDto.code && getPubKeysDto.phone_number) {
-            const smsRes = await this.validateSMS(
-              getPubKeysDto.code,
-              getPubKeysDto.phone_number,
-            );
-            if (smsRes) {
-              const customAuth = customAuthMethod(getPubKeysDto.phone_number);
-              authMethodResponse = {
-                primary_contact: getPubKeysDto.phone_number,
-                authMethod: {
-                  authMethodType: customAuth.authMethodType,
-                  accessToken: null,
-                },
-                authId: customAuth.id,
-              };
-            } else {
-              throw new ServiceError(
-                'SMS authentication failed. OTP Validation Unsuccessful',
-              );
-            }
-          } else {
-            throw new ServiceError(
-              'SMS authentication failed: OTP or Phone number not passed',
-            );
-          }
-          break;
-        }
-        case Provider.X: {
-          const xAuthSession = getPubKeysDto.x_session;
-          if (!xAuthSession) {
-            throw new BadRequestException(
-              'X authentication failed: X Auth data not passed',
-            );
-          }
+      const hasNativeAuth = await this.nativeAuthClient.hasNativeAuthEnabled(
+       apiKeyHash,
+       getPubKeysDto.provider,
+      )
 
-          if (!xAuthSession.oauth_token) {
-            throw new BadRequestException(
-              'X authentication failed: X Auth token not passed',
-            );
-          }
-
-          if (!xAuthSession.oauth_verifier) {
-            throw new BadRequestException(
-              'X authentication failed: X Auth verifier not passed',
-            );
-          }
-
-          const xAuthResponse = await this.twitterClient.generateAccessToken(
-            xAuthSession.oauth_token,
-            xAuthSession.oauth_verifier,
-          );
-
-          const authHeader: string = this.twitterClient.generateXAuthHeader(
-            xAuthResponse.oauth_token,
-            xAuthResponse.oauth_token_secret,
-            'GET',
-            { include_email: true },
-          );
-
-          const result = await this.twitterClient.getTwitterAccountCredentials(
-            authHeader,
-          );
-
-          const customAuth = customAuthMethod(result.email);
-          authMethodResponse = {
-            primary_contact: result.email,
-            profile_picture_url: result.profile_picture_url,
-            authMethod: {
-              authMethodType: customAuth.authMethodType,
-              accessToken: null,
-            },
-            authId: customAuth.id,
-            user: {
-              first_name: result.name,
-            },
-          };
-          break;
-        }
-        case Provider.FARCASTER: {
-          if (getPubKeysDto.farcaster_session) {
-            const farcasterRes = await this.farcasterClient.verifySignature(
-              getPubKeysDto.farcaster_session,
-            );
-            if (farcasterRes && farcasterRes.success && farcasterRes.fid) {
-              const customAuth = customAuthMethod(farcasterRes.fid);
-              authMethodResponse = {
-                primary_contact: farcasterRes.fid,
-                authMethod: {
-                  authMethodType: customAuth.authMethodType,
-                  accessToken: null,
-                },
-                authId: customAuth.id,
-              };
-            } else {
-              throw new ServiceError('Farcaster authentication failed');
-            }
-          } else {
-            throw new ServiceError('Farcaster session data not passed');
-          }
-          break;
-        }
-        case Provider.DISCORD:
-        case Provider.GOOGLE: {
-          //oauth
-          authMethodResponse = await this.authenticateLitSession(
-            getPubKeysDto.authKey,
-            getPubKeysDto.provider,
-          );
-          break;
-        }
-        case Provider.TELEGRAM: {
-          try {
-            if (!getPubKeysDto.telegram_session) {
-              throw new ServiceError('Telegram auth data not passed');
-            }
-            if (
-              !getPubKeysDto.telegram_session.id ||
-              !getPubKeysDto.telegram_session.hash ||
-              !getPubKeysDto.telegram_session.auth_date
-            ) {
-              throw new ServiceError(
-                'Missing required parameters for Telegram auth, missing id or hash or aut_date',
-              );
-            }
-
-            const telegramSession = getPubKeysDto.telegram_session;
-            const success = await this.telegramClient.verify(telegramSession);
-            if (!success) {
-              throw new ServiceError('Telegram auth verification failed');
-            }
-
-            const customAuth = customAuthMethod(telegramSession.id);
-            authMethodResponse = {
-              primary_contact: telegramSession.id,
-              authMethod: {
-                authMethodType: customAuth.authMethodType,
-                accessToken: null,
-              },
-              authId: customAuth.id,
-            };
-
-            if (telegramSession.photo_url) {
-              authMethodResponse.profile_picture_url =
-                telegramSession.photo_url;
-              authMethodResponse.user = {
-                profile_picture_url: telegramSession.photo_url,
-              };
-            }
-
-            if (telegramSession.first_name) {
-              authMethodResponse.user = {
-                ...authMethodResponse.user,
-                first_name: telegramSession.first_name,
-              };
-            }
-
-            if (telegramSession.last_name) {
-              authMethodResponse.user = {
-                ...authMethodResponse.user,
-                last_name: telegramSession.last_name,
-              };
-            }
-
-            if (telegramSession.username) {
-              authMethodResponse.user = {
-                ...authMethodResponse.user,
-                username: telegramSession.username,
-              };
-            }
-          } catch (error) {
-            throw new ServiceError('Error in authenticating Telegram', error);
-          }
-
-          break;
-        }
-        default:
-          throw new ServiceError(
-            'Authentication failed: Invalid Provider option',
-          );
-          break;
+      if (hasNativeAuth) {
+        authMethodResponse = await this.nativeAuthClient.verifyRequest(
+          getPubKeysDto.provider,
+          apiKeyHash,
+          getPubKeysDto,
+        )
+      } else {
+        authMethodResponse = await this.platformAuthClient.verifyRequest(
+          apiKeyHash,
+          getPubKeysDto.provider,
+          getPubKeysDto,
+          request
+        );
       }
 
       let pkp: {
@@ -696,6 +560,9 @@ export class OpenAuthService {
         accountId = dbResponse[0]._id;
       }
 
+      const accessControlConditions: AccessControlConditions =
+        request.body.accessControlConditions;
+
       // storing lit session in the db
       await this.getSessionKey(
         {
@@ -711,12 +578,14 @@ export class OpenAuthService {
         accountId,
         pkp.pkpPublicKey,
         pkp.signingPermissions,
+        accessControlConditions,
         authMethodResponse,
       );
       const end_time = performance.now();
       this.logger.log('Time taken to authenticate: ', end_time - start_time);
       return ethers.utils.computeAddress(pkp.pkpPublicKey);
     } catch (error) {
+      console.log(error);
       this.logger.error('Error in authenticating ', JSON.stringify(error));
       throw new ServiceError('Error in authenticating', error);
     }
@@ -729,63 +598,9 @@ export class OpenAuthService {
     if (mode == Provider.EMAIL) {
       return await this.stytchClient.sendPasscode(mode, contact);
     } else if (mode == Provider.SMS) {
-      try {
-        const twilio_auth_token = btoa(
-          `${TWILIO_ACCOUNT_SID}:${TWILIO_ACCOUNT_SECRET_AUTH_TOKEN}`,
-        );
-        const headers = {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Authorization: `Basic ${twilio_auth_token}`,
-        };
-        const data = {
-          To: contact,
-          Channel: 'sms',
-        };
-        const twilioResponse = await fetch(
-          `${TWILIO_AUTH_BASE_URL}Services/${TWILIO_SERVICE_ID}/Verifications`,
-          {
-            method: 'POST',
-            body: new URLSearchParams(data),
-            headers: headers,
-          },
-        );
-        this.logger.log('twilio response ', await twilioResponse.json());
-        return twilioResponse;
-      } catch (error) {
-        this.logger.error('Twilio OTP error ', error);
-        throw new ServiceError('Twilio OTP error ', error);
-      }
+      return await this.twilioAuthProvider.sendPasscode(mode, contact);
     } else {
       throw new ServiceError('Invalid mode for OTP');
-    }
-  }
-
-  async validateSMS(code: string, to: string): Promise<boolean> {
-    try {
-      const twilio_auth_token = btoa(
-        `${TWILIO_ACCOUNT_SID}:${TWILIO_ACCOUNT_SECRET_AUTH_TOKEN}`,
-      );
-      const auth_url = `${TWILIO_AUTH_BASE_URL}Services/${TWILIO_SERVICE_ID}/VerificationCheck`;
-
-      const headers = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${twilio_auth_token}`,
-      };
-
-      const sms_authenticate = await fetch(auth_url, {
-        method: 'POST',
-        body: new URLSearchParams({ Code: code, To: to }),
-        headers: headers,
-      });
-
-      const res = await sms_authenticate.json();
-      if (res.status == 'approved') {
-        return true;
-      }
-      return false;
-    } catch (error) {
-      this.logger.error('Error in validating sms ', error);
-      throw new ServiceError(error);
     }
   }
 
@@ -793,27 +608,47 @@ export class OpenAuthService {
     poll: PollSession,
     apiKeyhash: string,
   ): Promise<{ wallet_address: string; user: AccountUserData; key: string }> {
-    const sessionSigs = await this.sessionsRepository.findOne({
+    const sessionDoc = await this.sessionsRepository.findOne({
       apiKeyId: apiKeyhash,
       session_identifier: poll.session_identifier,
     });
-    if (sessionSigs) {
-      if (sessionSigs.polled) {
+    if (sessionDoc) {
+      if (sessionDoc.polled) {
         throw new ServiceError('Session already polled');
       }
 
       // 5 min limit to poll
-      if (Date.now() > sessionSigs.createdAt + 300000) {
-        await this.sessionsRepository.deleteSession(sessionSigs);
+      if (Date.now() > sessionDoc.createdAt + 300000) {
+        await this.sessionsRepository.deleteSession(sessionDoc);
         throw new ServiceError('Session poll timeout');
       }
 
-      const keys = await deconstructSessionSigs(sessionSigs);
-      await this.sessionsRepository.updateSession(keys.serverSessionSig);
+      const keys = await deconstructSessionSigs(sessionDoc);
+      sessionDoc.sessionSigs = keys.serverSessionSig;
+
+      if (!sessionDoc.accessControlConditions) {
+        throw new ServiceError(
+          `No access control conditions found for session ${sessionDoc.session_identifier}`,
+        );
+      }
+
+      const jwtSignerKey = generateAuthConditions(
+        sessionDoc.accessControlConditions,
+      );
+
+      const sessionKey: string = sign(
+        {
+          clientKey: keys.clientSessionKey,
+        },
+        jwtSignerKey,
+        { expiresIn: '7d' },
+      );
+
+      await this.sessionsRepository.updateSession(sessionDoc);
       return {
-        wallet_address: sessionSigs.wallet_address,
-        user: sessionSigs.user,
-        key: keys.clientSessionKey,
+        wallet_address: sessionDoc.wallet_address,
+        user: sessionDoc.user,
+        key: sessionKey,
       };
     } else {
       throw new ServiceError('No existing sessions');

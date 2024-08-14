@@ -1,30 +1,160 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ServiceError } from '../utils/types.interfaces';
+import { AuthMethodResponseObject, Provider, ServiceError } from "../common/types";
 import {
   X_API_BASE_URL,
   X_OAUTH_CALLBACK,
   X_OAUTH_VERSION,
   X_OAUTH_CONSUMER_KEY,
   X_OAUTH_CONSUMER_SECRET,
-  X_OAUTH_SIGNATURE_METHOD,
-} from '../utils/constants';
+  X_OAUTH_SIGNATURE_METHOD, LIT_CUSTOM_AUTH_TYPE_ID
+} from "../common/constants";
 import * as crypto from 'node:crypto';
 import * as qs from 'querystring';
 import { ethers } from 'ethers';
 import {
-  customAuthMethod,
-  generateHamcSignature,
-} from '../utils/helper-functions';
-import { TokenAndSecretRepository } from '../repositories/TokenAndSecret.repository';
+  customAuthMethod, decryptData,
+  generateHamcSignature
+} from "../common/helpers";
+import { TokenAndSecretRepository } from '../repositories/tokenAndSecret.repository';
+import { BaseAuthProvider } from "./Base.authProvider";
+import { OAuthClientDataRepository } from "../repositories/oAuthClientData.repository";
+import { Mixed } from "mongoose";
+import { XClientSecrets } from "../dto/AuthProviders.dto";
+import { XAuthDto } from "../dto/Accounts.dto";
 
 @Injectable()
-export class TwitterClient {
-  private readonly logger: Logger = new Logger(TwitterClient.name);
-
+export class TwitterAuthProvider extends BaseAuthProvider {
   constructor(
     private readonly tokenAndSecretRepository: TokenAndSecretRepository,
+    private readonly oauthClientDataRepository: OAuthClientDataRepository,
   ) {
-    this.logger.log('Twitter client initialized');
+    super(Provider.X, TwitterAuthProvider.name);
+    this.logger.log('Twitter authProviders initialized');
+  }
+
+  async registerCredentials(
+    apiKeyHash: string,
+    consumerKey: string,
+    consumerSecret: string,
+    oauthCallBack: string,
+  ): Promise<void> {
+    try {
+      await this.oauthClientDataRepository.addOrUpdateClientData({
+        apiKeyHash: apiKeyHash,
+        provider: Provider.X,
+        credentials: {
+          consumerKey: consumerKey as unknown as Mixed,
+          consumerSecret: consumerSecret as unknown as Mixed,
+          oauthCallBack: oauthCallBack as unknown as Mixed,
+        },
+      });
+    } catch (error) {
+      this.logger.error('Error registering credentials', error);
+      throw new ServiceError('Error registering credentials', error);
+    }
+  }
+
+  async generateCallbackUrl(apiKeyHash: string, state?: string): Promise<string> {
+    try {
+      const clientData = await this.oauthClientDataRepository.findOneByKey(
+        apiKeyHash,
+        Provider.X,
+      );
+
+      if (!clientData) {
+        this.logger.error('Client data not found');
+        throw new ServiceError('Client data not found');
+      }
+
+      const consumerKey: string = clientData.credentials['consumerKey'] as unknown as string;
+      const consumerSecret: string = clientData.credentials['consumerSecret'] as unknown as string;
+      const oauthCallBack: string = clientData.credentials['oauthCallBack'] as unknown as string;
+
+      if (!consumerKey || !consumerSecret || !oauthCallBack) {
+        this.logger.error('Client not registered, consumer key or consumer secret not found');
+        throw new ServiceError('Client not registered, consumer key or consumer secret not found');
+      }
+
+      const requestToken = await this.generateRequestToken(state, {
+        consumerKey,
+        consumerSecret,
+        oauthCallback: oauthCallBack,
+      });
+
+      return `${X_API_BASE_URL}/oauth/authenticate?oauth_token=${requestToken}`;
+    } catch (error) {
+      this.logger.error('Error generating callback URL', error);
+      throw new ServiceError('Error generating callback URL', error);
+    }
+  }
+
+  async verify(apiKeyHash: string, xAuthData: XAuthDto): Promise<AuthMethodResponseObject> {
+    try {
+      const tokenAndSecret = await this.tokenAndSecretRepository.findOneByKey(
+        xAuthData.oauth_token,
+      );
+
+      if (!tokenAndSecret) {
+        throw new ServiceError('Token data not found for the request');
+      }
+
+      const xClientSecrets = await this.oauthClientDataRepository.findOneByKey(
+        apiKeyHash,
+        Provider.X,
+      );
+
+      const encryptedXClientKey = xClientSecrets.credentials['consumerKey'] as unknown as string;
+      const encryptedXClientSecret = xClientSecrets.credentials['consumerSecret'] as unknown as string;
+      const encryptedXOAuthCallBack = xClientSecrets.credentials['oauthCallBack'] as unknown as string;
+
+      const xClientKey = decryptData(encryptedXClientKey);
+      const xClientSecret = decryptData(encryptedXClientSecret);
+      const xOAuthCallBack = decryptData(encryptedXOAuthCallBack);
+
+      const accessToken = await this.generateAccessToken(
+        xAuthData.oauth_token,
+        xAuthData.oauth_verifier,
+        {
+          consumerKey: xClientKey,
+          consumerSecret: xClientSecret,
+          oauthCallback: xOAuthCallBack,
+        }
+      );
+
+      const authHeader = this.generateXAuthHeader(
+        accessToken.oauth_token,
+        accessToken.oauth_token_secret,
+        'GET',
+        {},
+        {
+          consumerKey: xClientKey,
+          consumerSecret: xClientSecret,
+          oauthCallback: xOAuthCallBack,
+        }
+      );
+
+      const credentials = await this.getTwitterAccountCredentials(authHeader);
+      const customAuth = customAuthMethod(credentials.email);
+
+      return {
+        authMethod: {
+          authMethodType: LIT_CUSTOM_AUTH_TYPE_ID,
+          accessToken: null,
+        },
+        authId: customAuth.id,
+        primary_contact: credentials.email,
+        profile_picture_url: credentials.profile_picture_url,
+        user: {
+          first_name: credentials.name,
+          primary_contact: credentials.email,
+          profile_picture_url: credentials.profile_picture_url,
+        }
+      }
+
+    } catch (error) {
+      this.logger.error('Error verifying X authentication', error);
+      throw new ServiceError('Error verifying X authentication', error);
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,8 +168,11 @@ export class TwitterClient {
     };
   }
 
-  async generateRequestToken(state: string): Promise<string> {
-    const callbackUrl = `${X_OAUTH_CALLBACK}?state=${state}`;
+  async generateRequestToken(
+    state: string,
+    xClientSecrets?: XClientSecrets
+  ): Promise<string> {
+    const callbackUrl = `${xClientSecrets.oauthCallback || X_OAUTH_CALLBACK}?state=${state}`;
     const params = { oauth_callback: callbackUrl, ...this.xOAuthParams };
 
     const baseString =
@@ -47,7 +180,7 @@ export class TwitterClient {
       encodeURIComponent(`${X_API_BASE_URL}/oauth/request_token`) +
       '&' +
       encodeURIComponent(qs.stringify(params));
-    const signingKey = encodeURIComponent(X_OAUTH_CONSUMER_SECRET) + '&';
+    const signingKey = encodeURIComponent(xClientSecrets.consumerSecret || X_OAUTH_CONSUMER_SECRET) + '&';
     const oauthSignature = generateHamcSignature(signingKey, baseString);
 
     const authorizationHeader = `OAuth oauth_nonce="${
@@ -58,7 +191,7 @@ export class TwitterClient {
       params.oauth_signature_method
     }", oauth_timestamp="${
       params.oauth_timestamp
-    }", oauth_consumer_key="${X_OAUTH_CONSUMER_KEY}", oauth_signature="${encodeURIComponent(
+    }", oauth_consumer_key="${xClientSecrets.consumerKey || X_OAUTH_CONSUMER_KEY}", oauth_signature="${encodeURIComponent(
       oauthSignature,
     )}", oauth_version="${params.oauth_version}"`;
 
@@ -98,6 +231,7 @@ export class TwitterClient {
   async generateAccessToken(
     oauthToken: string,
     oauthVerifier: string,
+    xClientSecrets?: XClientSecrets
   ): Promise<{
     oauth_token: string;
     oauth_token_secret: string;
@@ -121,12 +255,12 @@ export class TwitterClient {
       '&' +
       encodeURIComponent(qs.stringify(params));
     const signingKey =
-      encodeURIComponent(X_OAUTH_CONSUMER_SECRET) +
+      encodeURIComponent(xClientSecrets.consumerSecret || X_OAUTH_CONSUMER_SECRET) +
       '&' +
       encodeURIComponent(oauthTokenSecret);
     const oauthSignature = generateHamcSignature(signingKey, baseString);
 
-    const authorizationHeader = `OAuth oauth_consumer_key="${X_OAUTH_CONSUMER_KEY}", oauth_nonce="${
+    const authorizationHeader = `OAuth oauth_consumer_key="${xClientSecrets.consumerKey || X_OAUTH_CONSUMER_KEY}", oauth_nonce="${
       params.oauth_nonce
     }", oauth_signature="${encodeURIComponent(
       oauthSignature,
@@ -210,10 +344,11 @@ export class TwitterClient {
     xauth_secret: string,
     method: string,
     params = {}, // query params from twitter
+    xClientSecrets?: XClientSecrets
   ): string {
     try {
       const headerParams = {
-        oauth_consumer_key: X_OAUTH_CONSUMER_KEY,
+        oauth_consumer_key: xClientSecrets.consumerKey || X_OAUTH_CONSUMER_KEY,
         oauth_nonce: btoa(ethers.utils.id(`${Math.random}`)),
         oauth_signature_method: X_OAUTH_SIGNATURE_METHOD,
         oauth_timestamp: Date.now() / 1000,
@@ -249,7 +384,7 @@ export class TwitterClient {
         )}`;
 
       const signing_key = `${encodeURIComponent(
-        X_OAUTH_CONSUMER_SECRET,
+        xClientSecrets.consumerSecret || X_OAUTH_CONSUMER_SECRET,
       )}&${xauth_secret}`;
 
       const signature: string = generateHamcSignature(

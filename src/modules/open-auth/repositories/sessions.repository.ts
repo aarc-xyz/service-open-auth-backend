@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { ServiceError } from '../utils/types.interfaces';
-import { excludedAttributes } from '../utils/helper-functions';
-import { Sessions, SessionsDocument } from '../entities/Sessions.entity';
-import { AccountUserData } from '../utils/types.interfaces';
-import { SessionSigs } from '@lit-protocol/types';
+import { ServiceError } from '../common/types';
+import { excludedAttributes } from '../common/helpers';
+import { AccessControlConditions, Sessions, SessionsDocument } from "../entities/Sessions.entity";
+import { AccountUserData } from '../common/types';
+import { SessionSigs } from "@lit-protocol/types";
 
 @Injectable()
 export class SessionsRepository {
@@ -22,6 +22,7 @@ export class SessionsRepository {
     session_identifier: string,
     apiKeyId: string,
     address: string,
+    accessControlConditions: AccessControlConditions,
   ): Promise<SessionsDocument> {
     try {
       const createdSession = new this.sessionsModel({
@@ -35,6 +36,7 @@ export class SessionsRepository {
         apiKeyId: apiKeyId,
         polled: false,
         wallet_address: address,
+        accessControlConditions: accessControlConditions,
       });
       return await createdSession.save();
     } catch (error) {

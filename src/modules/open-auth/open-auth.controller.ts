@@ -8,22 +8,23 @@ import {
   Post,
   Query,
   Req,
-  Res,
-} from '@nestjs/common';
+  Res, UseGuards
+} from "@nestjs/common";
 import { ethers } from 'ethers';
-import { Response } from 'express';
+import { Request, Response } from "express";
 import {
-  ClaimAccountDto,
   ExternalWalletDto,
-  GetPubKeyDto,
-  ResolveAccountDto,
-} from './dto/Accounts.dto';
+  GetPubKeyDto, RegisterWebAuthnDto,
+} from "./dto/Accounts.dto";
 import { PollSession } from './dto/Sessions.dto';
 import {
   SignMessageDto,
   TransactionsOperationDto,
 } from './dto/Transactions.dto';
 import { OpenAuthService } from './open-auth.service';
+import { AccessValidationGuard } from "./guards/AccessValidation.guard";
+import { Provider } from "./common/types";
+import { AuthProvidersDto } from "./dto/AuthProviders.dto";
 
 @Controller()
 export class OpenAuthController {
@@ -36,55 +37,57 @@ export class OpenAuthController {
     return 'open-auth is up and running';
   }
 
-  @Post('resolve')
-  async resolveAccount(
-    @Body() resolveAccountDto: ResolveAccountDto[],
-    @Res() res: Response,
-  ): Promise<Response> {
-    try {
-      const pkpAddresses: string[] = await this.openAuthService.resolveAccount(
-        resolveAccountDto,
-      );
-      return res.status(HttpStatus.OK).json({
-        code: HttpStatus.OK,
-        data: {
-          pkpAddresses: pkpAddresses,
-        },
-        message: 'success',
-      });
-    } catch (error) {
-      return res.status(HttpStatus.UNPROCESSABLE_ENTITY).json({
-        code: HttpStatus.UNPROCESSABLE_ENTITY,
-        data: error.data,
-        message: error.name,
-      });
-    }
-  }
-
-  @Post('claim')
-  async claimAccount(
+  @Post('add-credentials')
+  async addCredentials(
+    @Body() addAuthProviderDto: AuthProvidersDto,
     @Req() req: Request,
-    @Body() claimAccountDto: ClaimAccountDto,
+    @Headers() headers: Record<string, string>,
     @Res() res: Response,
   ): Promise<Response> {
     try {
-      const transactionDetails = await this.openAuthService.claimAccount(
-        claimAccountDto,
-      );
+      const keyHash = headers['x-api-key'];
+      await this.openAuthService.addCredentials(addAuthProviderDto, keyHash);
       return res.status(HttpStatus.OK).json({
         code: HttpStatus.OK,
-        data: transactionDetails,
         message: 'success',
       });
     } catch (error) {
       return res.status(HttpStatus.UNPROCESSABLE_ENTITY).json({
         code: HttpStatus.UNPROCESSABLE_ENTITY,
-        data: error.data,
-        message: error.name,
+        message: 'Failed to add credentials',
       });
     }
   }
 
+  @Get('callback-url/:provider')
+  async getCallBackUrl(
+    @Param() params: { provider: Provider },
+    @Query() query: { state: string },
+    @Req() req: Request,
+    @Headers() headers: Record<string, string>,
+    @Res() res: Response,
+  ): Promise<Response> {
+    try {
+      const keyHash = headers['x-api-key'];
+      const callbackUrl = await this.openAuthService.getClientCallbackUrl(
+        params.provider,
+        query.state,
+        keyHash,
+      );
+      return res.status(HttpStatus.OK).json({
+        code: HttpStatus.OK,
+        data: callbackUrl,
+        message: 'success',
+      });
+    } catch (error) {
+      return res.status(HttpStatus.UNPROCESSABLE_ENTITY).json({
+        code: HttpStatus.UNPROCESSABLE_ENTITY,
+        message: 'Failed to generate callback url',
+      });
+    }
+  }
+
+  @UseGuards(AccessValidationGuard)
   @Post('authenticate')
   async authenticate(
     @Req() req: Request,
@@ -93,11 +96,11 @@ export class OpenAuthController {
     @Res() res: Response,
   ): Promise<Response> {
     try {
-
       const keyHash = headers['x-api-key'];
       const response = await this.openAuthService.authenticate(
         getPubKey,
         keyHash,
+        req,
       );
       return res.status(HttpStatus.OK).json({
         code: HttpStatus.OK,
@@ -113,6 +116,7 @@ export class OpenAuthController {
     }
   }
 
+  @UseGuards(AccessValidationGuard)
   @Post('sign-message')
   async signMessage(
     @Req() req: Request,
@@ -137,6 +141,7 @@ export class OpenAuthController {
     }
   }
 
+  @UseGuards(AccessValidationGuard)
   @Post('sign-transaction')
   async signTransaction(
     @Req() req: Request,
@@ -161,6 +166,7 @@ export class OpenAuthController {
     }
   }
 
+  @UseGuards(AccessValidationGuard)
   @Post('send-transaction')
   async sendTransaction(
     @Req() req: Request,
@@ -208,6 +214,7 @@ export class OpenAuthController {
     }
   }
 
+  @UseGuards(AccessValidationGuard)
   @Get('poll-session/:provider/:session_identifier')
   async poll_session(
     @Headers() headers: Record<string, string>,
@@ -306,6 +313,57 @@ export class OpenAuthController {
       return res.status(HttpStatus.BAD_REQUEST).json({
         code: HttpStatus.BAD_REQUEST,
         message: 'Failed to get X request token',
+      });
+    }
+  }
+
+  @Get('webauthn-register-options/:session_identifier')
+  async getWebAuthnRegisterOptions(
+    @Param() params: { session_identifier: string },
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<Response> {
+    try {
+      const response =
+        await this.openAuthService.generateWebAuthnRegistrationOpts(
+          req,
+          params.session_identifier,
+        );
+      return res.status(HttpStatus.OK).json({
+        code: HttpStatus.OK,
+        data: response,
+        message: 'success',
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        code: HttpStatus.BAD_REQUEST,
+        data: error.data,
+        message: error.name,
+      });
+    }
+  }
+
+  @Post('register-webauthn')
+  async registerWebAuthn(
+    @Body() body: RegisterWebAuthnDto,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<Response> {
+    try {
+      const response = await this.openAuthService.registerWithWebAuthn(
+        req,
+        body,
+      );
+      return res.status(HttpStatus.OK).json({
+        code: HttpStatus.OK,
+        data: response,
+        message: 'success',
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        code: HttpStatus.BAD_REQUEST,
+        data: error.data,
+        message: error.name,
       });
     }
   }

@@ -9,7 +9,6 @@ import {
 } from '@lit-protocol/auth-helpers';
 import { AuthMethodScope } from '@lit-protocol/constants';
 import {
-  EthWalletProvider,
   LitAuthClient,
   StytchOtpProvider,
 } from '@lit-protocol/lit-auth-client';
@@ -26,20 +25,18 @@ import {
 } from '@lit-protocol/types';
 import { Injectable, Logger } from '@nestjs/common';
 import { ethers } from 'ethers';
-import * as siwe from 'siwe';
-import { ChainId } from '../utils/types.interfaces';
-import { ServiceError } from '../utils//types.interfaces';
-import { CHAIN_PROVIDERS } from '../utils/types.interfaces';
+import { ChainId } from '../common/types';
+import { ServiceError } from '../common/types';
+import { CHAIN_PROVIDERS } from '../common/types';
 import {
   customAuthAction,
   customAuthMethod,
-} from '../utils/helper-functions';
+} from '../common/helpers';
 import { pkpHelperAbi } from '../../../abis/PKPHelperContract.abi';
 import { pkpNftAbi } from '../../../abis/PKPNftContract.abi';
 import { pkpPermissionsAbi } from '../../../abis/PKPPermissionsContract.abi';
 import { abi } from '../../../abis/TransferEvent.abi';
 import {
-  CHRONICLE_RPC_URL,
   LIT_ACTION_1_CID,
   LIT_API_KEY,
   LIT_CLAIM_KEY_ACTION_CID,
@@ -51,22 +48,21 @@ import {
   pkpHelper_CONTRACT_ADDRESS,
   pkpNft_CONTRACT_ADDRESS,
   pkpPermissions_CONTRACT_ADDRESS,
-  SIWE_DELEGATION_URI,
-  STYTCH_PROJECT_ID,
-} from '../utils/constants';
+  STYTCH_PROJECT_ID, YELLOWSTONE_CHRONICLE_RPC_URL
+} from "../common/constants";
 import {
   AuthMethodResponseObject,
   PKPMintPayload,
   PkpSigningPermissions,
   Provider,
-} from '../utils/types.interfaces';
+} from '../common/types';
 
 @Injectable()
 export class LitClient {
   private readonly logger = new Logger(LitClient.name);
   private readonly litNodeClient = new LitNodeClient({
     litNetwork: LIT_CLIENT_NETWORK,
-    debug: true,
+    debug: false,
   });
 
   private readonly litAuthClient = new LitAuthClient({
@@ -83,7 +79,7 @@ export class LitClient {
   private readonly pkpContracts: { [key: string]: ethers.Contract } = {};
 
   constructor() {
-    this.provider = new ethers.providers.JsonRpcProvider(CHRONICLE_RPC_URL);
+    this.provider = new ethers.providers.JsonRpcProvider(YELLOWSTONE_CHRONICLE_RPC_URL);
     this.controllerWallet = new ethers.Wallet(
       LIT_CONTROLLER_PRIVATE_KEY,
       this.provider,
@@ -122,18 +118,6 @@ export class LitClient {
     setInterval(async () => {
       await this.litNodeClient.disconnect();
     }, LIT_CLIENT_TIMEOUT);
-  }
-
-  async computeCFAFromUserID(
-    keyId: string,
-  ): Promise<{ keyId: string; publicKey: string; ethAddress: string }> {
-    const publicKey = this.litNodeClient.computeHDPubKey(keyId.slice(2));
-    const ethAddress = ethers.utils.computeAddress('0x' + publicKey);
-    return {
-      keyId: keyId,
-      publicKey: publicKey,
-      ethAddress: ethAddress,
-    };
   }
 
   async generateProviderAuthMethod(
@@ -320,7 +304,6 @@ export class LitClient {
       this.logger.log('Mining a new PKP');
       const start_time = performance.now();
       const permittedLitAction = customAuthAction(LIT_ACTION_1_CID);
-      let signingPermissions: PkpSigningPermissions = null;
 
       let mintPayload: PKPMintPayload;
       switch (provider) {
@@ -335,11 +318,6 @@ export class LitClient {
             permittedAuthMethodIds: [authMethodObj.authId],
             permittedAuthMethodPubkeys: [`0x`],
             permittedAuthMethodScopes: [[AuthMethodScope.SignAnything]],
-          };
-          signingPermissions = {
-            litAction: true,
-            customAuth: true,
-            stytch: false,
           };
           break;
         }
@@ -360,12 +338,6 @@ export class LitClient {
               [AuthMethodScope.SignAnything],
               [AuthMethodScope.SignAnything],
             ],
-          };
-
-          signingPermissions = {
-            litAction: true,
-            customAuth: true,
-            stytch: true,
           };
           break;
         }
@@ -418,6 +390,11 @@ export class LitClient {
         tokenId,
       );
       const pkpAddress = ethers.utils.computeAddress(publicKey);
+      const signingPermissions = await this.checkAuthPermission(
+        tokenId,
+        authMethodObj,
+      );
+
       const end_time = performance.now();
       this.logger.log(`Time taken to claim PKP ${end_time - start_time} ms`);
       return {
@@ -664,73 +641,6 @@ export class LitClient {
       this.logger.error('Error in getting session sigs', error);
       throw new ServiceError('Error in getting session sigs', error);
     }
-  }
-
-  async delegateCredits(
-    delegateeAddresses: string[],
-    chainId: number,
-    expiration: Date,
-  ): Promise<AuthSig> {
-    const start_time = performance.now();
-    const _dappOwnerWalletAddress = await this.controllerWallet.getAddress();
-    const _domain = 'aarc.xyz';
-    const _expiration = expiration.toISOString();
-    const _statement = '';
-    const _uses = '100';
-    const litResource = new LitRLIResource(LIT_CREDITS_TOKENID);
-    const recapObject =
-      await this.litNodeClient.generateSessionCapabilityObjectWithWildcards([
-        litResource,
-      ]);
-    const capabilities = {
-      ...(LIT_CREDITS_TOKENID ? { nft_id: [LIT_CREDITS_TOKENID] } : {}),
-      ...(delegateeAddresses
-        ? {
-            delegate_to: delegateeAddresses.map((address) => address),
-          }
-        : {}),
-      uses: _uses.toString(),
-    };
-
-    recapObject.addCapabilityForResource(
-      litResource,
-      LitAbility.RateLimitIncreaseAuth,
-      capabilities,
-    );
-    const verified = recapObject.verifyCapabilitiesForResource(
-      litResource,
-      LitAbility.RateLimitIncreaseAuth,
-    );
-    if (!verified) {
-      throw new Error('Failed to verify capabilities for resource');
-    }
-
-    const nonce = this.litNodeClient.latestBlockhash;
-    let siweMessage = new siwe.SiweMessage({
-      domain: _domain,
-      address: _dappOwnerWalletAddress,
-      statement: _statement,
-      uri: SIWE_DELEGATION_URI,
-      version: '1',
-      chainId: chainId,
-      nonce: nonce?.toString(),
-      expirationTime: _expiration,
-    });
-    siweMessage = recapObject.addToSiweMessage(siweMessage);
-    const messageToSign = siweMessage.prepareMessage();
-
-    const signature = await this.controllerWallet.signMessage(messageToSign);
-
-    const authSig = {
-      sig: signature,
-      derivedVia: 'web3.eth.personal.sign',
-      signedMessage: messageToSign,
-      address: _dappOwnerWalletAddress.toLowerCase(),
-      algo: null,
-    };
-    const end_time = performance.now();
-    this.logger.log(`Time taken to delegate credits ${end_time - start_time}`);
-    return authSig;
   }
 
   async getPKPEtherWallet(

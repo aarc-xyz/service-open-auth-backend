@@ -1,6 +1,6 @@
 import { Transform } from 'class-transformer';
 import { IsNotEmpty, IsString } from 'class-validator';
-import { Provider } from '../utils/types.interfaces';
+import { Provider } from '../common/types';
 
 export class ResolveAccountDto {
   @IsString()
@@ -56,6 +56,40 @@ export class TelegramAuthDto {
   hash?: string;
 }
 
+export class WebAuthnDto {
+  @IsString()
+  @IsNotEmpty()
+  id: string;
+
+  @IsString()
+  @IsNotEmpty()
+  rawId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  clientDataJSON: string;
+
+  @IsString()
+  @IsNotEmpty()
+  authenticatorData: string;
+}
+
+export class RegisterWebAuthnDto extends WebAuthnDto {
+  @IsString()
+  @IsNotEmpty()
+  attestationObject: string;
+
+  @IsString()
+  @IsNotEmpty()
+  wallet_address: string;
+}
+
+export class AuthenticateWebAuthnDto extends WebAuthnDto {
+  @IsString()
+  @IsNotEmpty()
+  signature: string;
+}
+
 export class GetPubKeyDto {
   @IsString()
   @IsNotEmpty()
@@ -80,6 +114,8 @@ export class GetPubKeyDto {
   x_session?: XAuthDto;
 
   telegram_session?: TelegramAuthDto;
+
+  webauthn_session?: AuthenticateWebAuthnDto;
 }
 
 export class ValidateOTPDto {

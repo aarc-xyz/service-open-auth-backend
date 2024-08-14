@@ -1,13 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import stytch, {
-  MagicLinksAuthenticateResponse,
   OAuthAuthenticateResponse,
   OTPsEmailLoginOrCreateResponse,
-  OTPsSmsLoginOrCreateResponse,
   SessionsAuthenticateResponse,
 } from 'stytch';
-import { ServiceError } from '../utils/types.interfaces';
-import { STYTCH_PROJECT_ID, STYTCH_SECRET } from '../utils/constants';
+import { ServiceError } from '../common/types';
+import { STYTCH_PROJECT_ID, STYTCH_SECRET } from '../common/constants';
 
 @Injectable()
 export class StytchClient {
@@ -20,19 +18,6 @@ export class StytchClient {
   async validateOAuth(token: string): Promise<OAuthAuthenticateResponse> {
     try {
       return await this.stytchClient.oauth.authenticate({
-        token: token,
-        session_duration_minutes: 60 * 24 * 7,
-      });
-    } catch (error) {
-      throw new ServiceError('SessionAuthenticate Error', error);
-    }
-  }
-
-  async validateMagicLink(
-    token: string,
-  ): Promise<MagicLinksAuthenticateResponse> {
-    try {
-      return await this.stytchClient.magicLinks.authenticate({
         token: token,
         session_duration_minutes: 60 * 24 * 7,
       });

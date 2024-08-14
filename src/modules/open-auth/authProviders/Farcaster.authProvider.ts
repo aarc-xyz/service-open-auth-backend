@@ -2,42 +2,51 @@ import { ethers } from 'ethers';
 import { Injectable, Logger } from '@nestjs/common';
 import { SiweMessage } from 'siwe';
 import { FarcasterAuthDto } from '../dto/Accounts.dto';
-import { ServiceError } from '../utils/types.interfaces';
+import { Provider, ServiceError } from "../common/types";
 import {
   FARCASTER_ID_REGISTRY_CONTRACT_ADDRESS,
   FID_URI_REGEX,
   VALID_STATEMENTS,
   VALID_CHAIN_ID,
-} from '../utils/constants';
-import { CHAIN_PROVIDERS } from '../utils/types.interfaces';
+} from '../common/constants';
+import { CHAIN_PROVIDERS } from '../common/types';
 import { FarcasterIdRegistryAbi } from '../../../abis/FarcasterIdRegistry.abi';
+import { BaseAuthProvider } from "./Base.authProvider";
 
 @Injectable()
-export class FarcasterClient {
+export class FarcasterAuthProvider extends BaseAuthProvider {
   private readonly FARCASTER_CONTRACTS_CHAIN_ID = 10;
-  private readonly logger: Logger = new Logger(FarcasterClient.name);
-  private readonly provider: ethers.providers.Provider;
+  private readonly ethersProvider: ethers.providers.Provider;
   private readonly farcasterIdRegistryContract: ethers.Contract;
 
   constructor() {
-    this.provider = new ethers.providers.JsonRpcProvider(
+    super(Provider.FARCASTER, FarcasterAuthProvider.name);
+    this.ethersProvider = new ethers.providers.JsonRpcProvider(
       CHAIN_PROVIDERS[this.FARCASTER_CONTRACTS_CHAIN_ID],
     );
     // Creating a read-only contract instance
     this.farcasterIdRegistryContract = new ethers.Contract(
       FARCASTER_ID_REGISTRY_CONTRACT_ADDRESS,
       FarcasterIdRegistryAbi,
-      this.provider,
+      this.ethersProvider,
     );
-    this.logger.log('FarcasterClient initialized');
+    this.logger.log('FarcasterAuthProvider initialized');
   }
 
-  async verifySignature(
+  async generateCallbackUrl(): Promise<string> {
+    throw new Error('Method not implemented.');
+  }
+
+  async registerCredentials(): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+
+  async verify(
     data: FarcasterAuthDto,
   ): Promise<{ success: boolean; fid?: string }> {
     // verify the signature
     try {
-      const fid = await this.verify(data);
+      const fid = await this.verifyData(data);
       return {
         success: true,
         fid: fid,
@@ -50,7 +59,7 @@ export class FarcasterClient {
     }
   }
 
-  private async verify(data: FarcasterAuthDto): Promise<string> {
+  private async verifyData(data: FarcasterAuthDto): Promise<string> {
     try {
       const message = this.validateMessage(data.message);
 
@@ -63,7 +72,7 @@ export class FarcasterClient {
       }
 
       // verify the signature
-      const siwe = await message.validate(data.signature, this.provider);
+      const siwe = await message.validate(data.signature, this.ethersProvider);
       const custody = siwe.address;
 
       // verify the FID

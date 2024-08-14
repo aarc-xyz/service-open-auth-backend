@@ -1,13 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { ServiceError } from '../utils/types.interfaces';
+import { ServiceError } from '../common/types';
 import { TransactionDto } from '../dto/Transactions.dto';
 import {
   PkpTransaction,
   PkpTransactionDocument,
 } from '../entities/PkpTransaction.entity';
-import { PkpTransactionData } from '../utils/types.interfaces';
+import { PkpTransactionData } from '../common/types';
 import {
   BridgeTokens,
   BridgeTokensDocument,

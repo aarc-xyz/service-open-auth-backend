@@ -1,5 +1,5 @@
 import { IsNotEmpty, IsString } from 'class-validator';
-import { Provider } from '../utils/types.interfaces';
+import { Provider } from '../common/types';
 import { Transform } from 'class-transformer';
 
 export class SessionKeyDto {

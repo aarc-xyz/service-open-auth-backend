@@ -1,8 +1,8 @@
 import { BadRequestException, HttpStatus, Logger } from '@nestjs/common';
 import { ethers } from 'ethers';
-import { SessionsDocument } from '../entities/Sessions.entity';
+import { AccessControlConditions, SessionsDocument } from '../entities/Sessions.entity';
 import {
-  AARC_CUSTOM_AUTH_SALT,
+  PLATFORM_CUSTOM_AUTH_SALT,
   LIT_CLAIM_KEY_ACTION_CID,
   LIT_CUSTOM_AUTH_TYPE_ID,
 } from './constants';
@@ -10,7 +10,7 @@ import { MESSAGES } from './response.messages';
 import * as crypto from 'node:crypto';
 import * as bs58 from 'bs58';
 import { SessionSigs } from '@lit-protocol/types';
-import { IExcludeAttributes } from "./types.interfaces";
+import { IExcludeAttributes } from "./types";
 
 /**
  *
@@ -49,7 +49,7 @@ export function reconstructSessionSigs(
 
 export async function deconstructSessionSigs(
   sessionDoc: SessionsDocument,
-): Promise<{ clientSessionKey: string; serverSessionSig: SessionsDocument }> {
+): Promise<{ clientSessionKey: string; serverSessionSig: SessionSigs }> {
   if (new Date(sessionDoc.expiresAt).valueOf() < Date.now()) {
     throw new Error('The session has expired');
   }
@@ -58,7 +58,10 @@ export async function deconstructSessionSigs(
   const clientSessionKey = signature.slice(0, Math.floor(signature.length / 2));
   const serverSessionKey = signature.slice(Math.floor(signature.length / 2));
   sessionDoc.sessionSigs[nodeIp].sig = serverSessionKey;
-  return { clientSessionKey: clientSessionKey, serverSessionSig: sessionDoc };
+  return {
+    clientSessionKey: clientSessionKey,
+    serverSessionSig: sessionDoc.sessionSigs,
+  };
 }
 /**
  *
@@ -86,7 +89,7 @@ export function customAuthMethod(contact: string): {
   authMethodType: number;
 } {
   const id = ethers.utils.keccak256(
-    ethers.utils.toUtf8Bytes(`${contact}: ${AARC_CUSTOM_AUTH_SALT}`),
+    ethers.utils.toUtf8Bytes(`${contact}: ${PLATFORM_CUSTOM_AUTH_SALT}`),
   );
   return { id: id, authMethodType: LIT_CUSTOM_AUTH_TYPE_ID };
 }
@@ -98,4 +101,55 @@ export function customAuthAction(cid: string): string {
 
 export function generateHamcSignature(signingKey: string, data: string) {
   return crypto.createHmac('sha1', signingKey).update(data).digest('base64');
+}
+
+export function generateAuthConditions(
+  accessControlConditions: AccessControlConditions,
+): string {
+  return crypto
+    .createHash('sha256')
+    .update(
+      `${accessControlConditions.origin}-${accessControlConditions.agent}`,
+    )
+    .digest('hex');
+}
+
+export function encryptData(data: string): string {
+  const hash = crypto
+    .createHash('sha256')
+    .update(PLATFORM_CUSTOM_AUTH_SALT)
+    .digest();
+  const iv = hash.slice(0, 12);
+  const key = crypto
+    .createHash('sha256')
+    .update(PLATFORM_CUSTOM_AUTH_SALT)
+    .digest();
+  const cipher = crypto.createCipheriv('aes-256-ccm', key, iv, {
+    authTagLength: 16,
+  });
+  let encrypted = cipher.update(data, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const authTag = cipher.getAuthTag();
+  return iv.toString('hex') + ':' + encrypted + ':' + authTag.toString('hex');
+}
+
+export function decryptData(data: string): string {
+  const parts = data.split(':');
+  if (parts.length !== 3) {
+    throw new Error('Invalid encrypted data format');
+  }
+  const iv = Buffer.from(parts[0], 'hex');
+  const key = crypto
+    .createHash('sha256')
+    .update(PLATFORM_CUSTOM_AUTH_SALT)
+    .digest();
+  const encryptedText = parts[1];
+  const authTag = Buffer.from(parts[2], 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-ccm', key, iv, {
+    authTagLength: 16,
+  });
+  decipher.setAuthTag(authTag);
+  let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
 }

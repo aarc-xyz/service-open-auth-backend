@@ -24,6 +24,7 @@ export enum Provider {
   SMS = 'sms',
   FARCASTER = 'farcaster',
   TELEGRAM = 'telegram',
+  WEBAUTHN = 'webauthn',
 }
 
 export interface AuthMethodResponseObject {

@@ -5,7 +5,7 @@ import {
   TokenAndSecretDocument,
 } from '../entities/TokenAndSecret';
 import { Model } from 'mongoose';
-import { ServiceError } from '../utils/types.interfaces';
+import { ServiceError } from '../common/types';
 
 @Injectable()
 export class TokenAndSecretRepository {
