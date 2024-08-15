@@ -490,6 +490,7 @@ export class OpenAuthService {
         );
       }
 
+
       let pkp: {
         pkpAddress: string;
         pkpPublicKey: string;
@@ -585,7 +586,6 @@ export class OpenAuthService {
       this.logger.log('Time taken to authenticate: ', end_time - start_time);
       return ethers.utils.computeAddress(pkp.pkpPublicKey);
     } catch (error) {
-      console.log(error);
       this.logger.error('Error in authenticating ', JSON.stringify(error));
       throw new ServiceError('Error in authenticating', error);
     }

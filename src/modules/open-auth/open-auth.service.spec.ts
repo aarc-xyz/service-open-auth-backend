@@ -33,6 +33,7 @@ import * as jwt from 'jsonwebtoken';
 import { Request } from "express";
 import { PlatformAuthClient } from "./clients/PlatformAuth.client";
 import { TwilioAuthProvider } from "./authProviders/Twilio.authProvider";
+import { LIT_CUSTOM_AUTH_TYPE_ID } from "./common/constants";
 
 jest.mock('jsonwebtoken', () => ({
   sign: jest.fn(),
@@ -417,6 +418,7 @@ describe('OpenAuthService', () => {
 		authId: 'mock_authId',
 	  });
 	  mockApiKeysRepository.findOne.mockResolvedValue(mockApiResponse);
+	  mockPlatformAuthClient.verifyRequest.mockResolvedValueOnce(mockAuthMethodResponse)
 	  mockStytchClient.handleProviderOauth.mockResolvedValue(
 		mockProviderAuthValue,
 	  );
@@ -448,6 +450,7 @@ describe('OpenAuthService', () => {
 		id: 'mock_authId',
 	  });
 	  mockApiKeysRepository.findOne.mockResolvedValue(mockApiResponse);
+	  mockPlatformAuthClient.verifyRequest.mockResolvedValueOnce(mockAuthMethodResponse)
 	  mockStytchClient.handleProviderOauth.mockResolvedValue(
 		mockProviderAuthValue,
 	  );
@@ -489,6 +492,7 @@ describe('OpenAuthService', () => {
 		authId: 'mock_authId',
 	  });
 	  mockApiKeysRepository.findOne.mockResolvedValue(mockApiResponse);
+	  mockPlatformAuthClient.verifyRequest.mockResolvedValueOnce(mockAuthMethodResponse)
 	  mockStytchClient.validateEmailOTP.mockResolvedValue({
 		session_jwt: 'sample_stytch_session_jwt',
 	  });
@@ -538,6 +542,7 @@ describe('OpenAuthService', () => {
 	  });
 
 	  mockApiKeysRepository.findOne.mockResolvedValue(mockApiResponse);
+	  mockPlatformAuthClient.verifyRequest.mockResolvedValueOnce(mockAuthMethodResponse)
 
 	  mockLitClient.getPubKeysFromAuthMethod.mockResolvedValue(
 		mockPkpPublicKeys,
@@ -590,6 +595,7 @@ describe('OpenAuthService', () => {
 
 	it('should return a pkpaddress string for SMS provider', async () => {
 	  mockApiKeysRepository.findOne.mockResolvedValue(mockApiResponse);
+	  mockPlatformAuthClient.verifyRequest.mockResolvedValueOnce(mockAuthMethodResponse)
 
 	  jest.spyOn(global, 'fetch').mockImplementation(
 		jest.fn(() =>
@@ -652,6 +658,7 @@ describe('OpenAuthService', () => {
 		authId: 'mock_authId',
 	  });
 	  mockApiKeysRepository.findOne.mockResolvedValue(mockApiResponse);
+	  mockPlatformAuthClient.verifyRequest.mockResolvedValueOnce(mockAuthMethodResponse)
 	  mockStytchClient.validateEmailOTP.mockResolvedValue({
 		session_jwt: 'sample_stytch_session_jwt',
 	  });
@@ -775,6 +782,7 @@ describe('OpenAuthService', () => {
 	  };
 
 	  mockApiKeysRepository.findOne.mockResolvedValue(mockApiResponse);
+	  mockPlatformAuthClient.verifyRequest.mockResolvedValueOnce(mockAuthMethodResponse)
 	  mockFarcasterAuthProvider.verifySignature.mockResolvedValue(
 		mockVerifySignatureResponse,
 	  );
@@ -948,6 +956,7 @@ describe('OpenAuthService', () => {
 	  ];
 
 	  mockApiKeysRepository.findOne.mockResolvedValue(mockApiResponse);
+	  mockPlatformAuthClient.verifyRequest.mockResolvedValueOnce(mockAuthMethodResponse)
 
 	  mockStytchClient.handleProviderOauth.mockResolvedValue(
 		mockProviderAuthValue,
@@ -1042,6 +1051,7 @@ describe('OpenAuthService', () => {
 	  };
 
 	  mockApiKeysRepository.findOne.mockResolvedValue(mockApiResponse);
+	  mockPlatformAuthClient.verifyRequest.mockResolvedValueOnce(mockAuthMethodResponse)
 
 	  mockStytchClient.handleProviderOauth.mockResolvedValue(
 		mockProviderAuthValue,
@@ -1104,6 +1114,7 @@ describe('OpenAuthService', () => {
 	  };
 
 	  mockApiKeysRepository.findOne.mockResolvedValue(mockApiResponse);
+	  mockPlatformAuthClient.verifyRequest.mockResolvedValueOnce(mockAuthMethodResponse)
 	  mockWebAuthnProvider.verifyAuthentication.mockResolvedValueOnce(
 		'example@example.com',
 	  );
@@ -1175,6 +1186,7 @@ describe('OpenAuthService', () => {
 
 	it('should successfully authenticate user with telegram', async () => {
 	  mockApiKeysRepository.findOne.mockResolvedValue(mockApiResponse);
+	  mockPlatformAuthClient.verifyRequest.mockResolvedValueOnce(mockAuthMethodResponse)
 
 	  mockTelegramAuthProvider.verify.mockResolvedValue(true);
 
@@ -1233,6 +1245,7 @@ describe('OpenAuthService', () => {
 	  };
 
 	  mockApiKeysRepository.findOne.mockResolvedValue(mockApiResponse);
+	  mockPlatformAuthClient.verifyRequest.mockResolvedValueOnce(mockAuthMethodResponse)
 
 	  mockTelegramAuthProvider.verify.mockResolvedValueOnce(true);
 

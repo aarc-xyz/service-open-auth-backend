@@ -161,6 +161,9 @@ export class PlatformAuthClient {
               authMethodType: LIT_CUSTOM_AUTH_TYPE_ID,
               accessToken: null,
             },
+            user: {
+              primary_contact: sessionResponse.fid,
+            },
             authId: customAuth.id,
             primary_contact: sessionResponse.fid,
           };
@@ -204,10 +207,13 @@ export class PlatformAuthClient {
 
           const customAuth = customAuthMethod(primary_contact);
           return {
-            primary_contact,
+            primary_contact: primary_contact,
             authMethod: {
               authMethodType: customAuth.authMethodType,
               accessToken: null,
+            },
+            user: {
+              primary_contact: primary_contact,
             },
             authId: customAuth.id,
           };
