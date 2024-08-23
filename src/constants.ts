@@ -2,15 +2,8 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-export const DB_URL = process.env.DB_URL || '';
+export const MONGO_DB_URL = process.env.DB_URL || '';
 export const OPENAUTH_SERVICE_PORT = process.env.OPENAUTH_SERVICE_PORT || '';
-export const API_KEY = process.env.API_KEY || '';
-export const SECRET_KEY = process.env.SECRET_KEY || '';
-export const MULTI_CHAIN_BAL_ROUTE = process.env.MULTI_CHAIN_BAL_ROUTE || '';
-export const UNI_CHAIN_BAL_ROUTE = process.env.UNI_CHAIN_BAL_ROUTE || '';
-export const JWT_SECRET_KEY = process.env.JWT_SECRET_KEY || '';
-export const MULTI_SOURCE_QUOTE_ROUTE =
-  process.env.MULTI_SOURCE_QUOTE_ROUTE || '';
 
 // RPC_URLS
 export const ETH_MAINNET_RPC_URL = process.env.ETH_MAINNET_RPC_URL || '';
@@ -35,14 +28,7 @@ export const LINEA_TESTNET_RPC_URL = process.env.LINEA_TESTNET_RPC_URL || '';
 export const validateEnvironmentVariables = (): void => {
   const missingVariables = [];
 
-  if (!DB_URL) missingVariables.push('DB_URL');
-  if (!API_KEY) missingVariables.push('API_KEY');
-  if (!SECRET_KEY) missingVariables.push('CRYPTO_COMPARE_API_KEY');
-  if (!MULTI_CHAIN_BAL_ROUTE) missingVariables.push('CRYPTO_COMPARE_API_KEY');
-  if (!JWT_SECRET_KEY) missingVariables.push('JWT_SECRET_KEY');
-  if (!MULTI_SOURCE_QUOTE_ROUTE)
-    missingVariables.push('MULTI_SOURCE_QUOTE_ROUTE');
-  if (!UNI_CHAIN_BAL_ROUTE) missingVariables.push('UNI_CHAIN_BAL_ROUTE');
+  if (!MONGO_DB_URL) missingVariables.push('DB_URL');
   if (!OPENAUTH_SERVICE_PORT) missingVariables.push('OPENAUTH_SERVICE_PORT');
 
   // RPC_URLS
