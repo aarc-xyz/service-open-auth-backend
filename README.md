@@ -1,73 +1,131 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="200" alt="Nest Logo" /></a>
-</p>
+# Service Open Auth Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+[![Discord](https://img.shields.io/discord/YOUR_DISCORD_ID)](https://discord.gg/3kFCfBgSdY)
+[![Telegram](https://img.shields.io/badge/Telegram-Join%20Chat-blue?style=flat&logo=telegram)](https://t.me/aarcxyz)
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+For quick support: [Join our Discord](https://discord.gg/3kFCfBgSdY) | [Join our Telegram](https://t.me/aarcxyz)
 
-## Description
+A backend service for OpenAuth, providing necessary APIs for user registration, login, authentication, and integration with blockchain protocols and other services.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Table of Contents
+
+- [Service Open Auth Backend](#service-open-auth-backend)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Installation](#installation)
+  - [Usage](#usage)
+    - [Development](#development)
+    - [Production](#production)
+  - [Project Structure](#project-structure)
+  - [Environment Variables](#environment-variables)
+    - [Required Variables](#required-variables)
+    - [Blockchain RPC URLs](#blockchain-rpc-urls)
+  - [Contributing](#contributing)
+
+## Overview
+
+The Service Open Auth Backend is a crucial component of the OpenAuth ecosystem, handling server-side operations for authentication and blockchain interactions.
 
 ## Installation
 
-```bash
-$ npm install
+1. Clone the repository:
+    ```sh
+    git clone https://github.com/aarc-xyz/service-open-auth-backend.git
+    cd service-open-auth-backend
+    ```
+
+2. Install dependencies:
+    ```sh
+    npm install
+    ```
+
+3. Set up environment variables:
+    ```sh
+    cp .env.example .env
+    ```
+   Edit the `.env` file with your specific configuration. See [Environment Variables](#environment-variables) for details.
+
+4. Build the project:
+    ```sh
+    npm run build
+    ```
+
+## Usage
+
+### Development
+
+To start the development server with hot-reloading:
+
+```sh
+npm run start:dev
 ```
 
-## Running the app
+### Production
 
-```bash
-# development
-$ npm run start
+To start the production server:
 
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+```sh
+npm run start:prod
 ```
 
-## Test
+## Project Structure
 
-```bash
-# unit tests
-$ npm run test
+- **src/**
+  - **modules/open-auth/**: OpenAuth module (controllers, services, etc.)
+  - **abis/**: ABI files for blockchain contract interactions
+  - **main.ts**: Application entry point
+- **test/**: End-to-end tests
 
-# e2e tests
-$ npm run test:e2e
+## Environment Variables
 
-# test coverage
-$ npm run test:cov
-```
+### Required Variables
 
-## Support
+| Variable | Description | How to Obtain |
+|----------|-------------|---------------|
+| `DB_URL` | MongoDB connection string | [MongoDB Atlas](https://www.mongodb.com/docs/atlas/tutorial/connect-to-your-cluster/) |
+| `LOGGER_ENV` | Logging flag | Set manually |
+| `OPENAUTH_SERVICE_PORT` | Service port | Set manually |
+| `PLATFORM_CUSTOM_AUTH_SALT` | Custom auth salt | Generate securely |
+| `STYTCH_PROJECT_ID` | Stytch project ID | [Stytch Dashboard](https://stytch.com/dashboard) |
+| `STYTCH_SECRET` | Stytch secret key | [Stytch Dashboard](https://stytch.com/dashboard) |
+| `LIT_API_KEY` | Lit Protocol API key | [Lit Protocol Dashboard](https://developer.litprotocol.com/) |
+| `LIT_CHRONICLE_YELLOWSTONE_RPC` | Lit Protocol RPC URL | [Lit Documentation](https://developer.litprotocol.com/docs/intro) |
+| `LIT_CONTROLLER_PRIVATE_KEY` | Lit Protocol private key | Generate securely |
+| `LIT_CREDITS_TOKENID` | Lit Protocol token ID | [Lit Documentation](https://developer.litprotocol.com/docs/intro) |
+| `TWILIO_ACCOUNT_SID` | Twilio account SID | [Twilio Console](https://www.twilio.com/console) |
+| `TWILIO_ACCOUNT_SECRET_AUTH_TOKEN` | Twilio auth token | [Twilio Console](https://www.twilio.com/console) |
+| `TWILIO_SERVICE_ID` | Twilio service ID | [Twilio Console](https://www.twilio.com/console) |
+| `X_OAUTH_CALLBACK` | OAuth callback URL | Set manually |
+| `X_OAUTH_CONSUMER_KEY` | Twitter OAuth consumer key | [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard) |
+| `X_OAUTH_CONSUMER_SECRET` | Twitter OAuth consumer secret | [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard) |
+| `PLATFORM_AUTH_VALIDATION_URL` | Auth validation URL | Set manually |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token | [BotFather on Telegram](https://core.telegram.org/bots#6-botfather) |
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Blockchain RPC URLs
 
-## Stay in touch
+Obtain free RPC URLs from providers like Ankr. Required for various blockchain networks:
 
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+- `ETH_MAINNET_RPC_URL`
+- `ETH_GOERLI_RPC_URL`
+- `ETH_SEPOLIA_RPC_URL`
+- `POLYGON_MAINNET_RPC_URL`
+- `POLYGON_AMOY_RPC_URL`
+- `POLYGON_ZKEVM_MAINNET_RPC_URL`
+- `ARBITRUM_RPC_URL`
+- `ARBITRUM_SEPOLIA_RPC_URL`
+- `ARBITRUM_GOERLI_RPC_URL`
+- `OPTIMISM_MAINNET_RPC_URL`
+- `BASE_MAINNET_RPC_URL`
+- `BASE_TESTNET_RPC_URL`
+- `BSC_MAINNET_RPC_URL`
+- `BSC_TESTNET_RPC_URL`
+- `AVALANCHE_MAINNET_RPC_URL`
+- `AVALANCHE_FUJI_RPC_URL`
+- `LINEA_MAINNET_RPC_URL`
+- `LINEA_TESTNET_RPC_URL`
 
-## License
+## Contributing
 
-Nest is [MIT licensed](LICENSE).
+We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) for details on how you can help improve the Service Open Auth Backend.
+
+For more detailed information or support, please reach out through our [Discord](https://discord.gg/3kFCfBgSdY) or [Telegram](https://t.me/aarcxyz) channels.
