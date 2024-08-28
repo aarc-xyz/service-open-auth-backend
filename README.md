@@ -1,9 +1,6 @@
 # Service Open Auth Backend
 
-[![Discord](https://img.shields.io/discord/YOUR_DISCORD_ID)](https://discord.gg/3kFCfBgSdY)
-[![Telegram](https://img.shields.io/badge/Telegram-Join%20Chat-blue?style=flat&logo=telegram)](https://t.me/aarcxyz)
-
-For quick support: [Join our Discord](https://discord.gg/3kFCfBgSdY) | [Join our Telegram](https://t.me/aarcxyz)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Chat-7289DA?style=flat&logo=discord&logoColor=white)](https://discord.gg/3kFCfBgSdY) [![Telegram](https://img.shields.io/badge/Telegram-Join%20Chat-blue?style=flat&logo=telegram)](https://t.me/aarcxyz)
 
 A backend service for OpenAuth, providing necessary APIs for user registration, login, authentication, and integration with blockchain protocols and other services.
 
