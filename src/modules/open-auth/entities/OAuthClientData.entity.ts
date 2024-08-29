@@ -5,7 +5,7 @@ import { Provider } from '../common/types';
 @Schema()
 export class OAuthClientData {
   @Prop({ required: true })
-  apiKeyHash: string;
+  clientId: string;
 
   @Prop({ unique: true, required: true, type: SchemaTypes.Mixed })
   credentials: Record<string, Mixed>;

@@ -27,10 +27,10 @@ export class TelegramAuthProvider extends BaseAuthProvider {
     this.logger.log('TelegramAuthProvider initialized');
   }
 
-  async registerCredentials(apiKeyHash: string, botName: string, botToken: string): Promise<void> {
+  async registerCredentials(id: string, botName: string, botToken: string): Promise<void> {
     try {
       await this.oauthClientDataRepository.addOrUpdateClientData({
-        apiKeyHash: apiKeyHash,
+        clientId: id,
         provider: Provider.TELEGRAM,
         credentials: {
           botToken: botToken as unknown as Mixed,
@@ -43,10 +43,10 @@ export class TelegramAuthProvider extends BaseAuthProvider {
     }
   }
 
-  async generateCallbackUrl(apiKeyHash: string): Promise<string> {
+  async generateCallbackUrl(id: string): Promise<string> {
     try {
       const clientData = await this.oauthClientDataRepository.findOneByKey(
-        apiKeyHash,
+        id,
         Provider.TELEGRAM,
       );
 

@@ -41,14 +41,12 @@ export class AccountsRepository {
 
   async createExternalWallet(
     address: string,
-    apiKey: string,
     walletType: string,
   ): Promise<ExternalWallet> {
     const payload = new this.externalWalletModel({
       address: address,
       createdAt: Date.now(),
       lastLoginAt: Date.now(),
-      apiKeyId: apiKey,
       walletType: walletType,
     });
     return await payload.save();

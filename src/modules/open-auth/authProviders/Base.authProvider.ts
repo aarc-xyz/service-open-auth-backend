@@ -16,7 +16,7 @@ export abstract class BaseAuthProvider {
 
   abstract registerCredentials(...args: Array<unknown>): Promise<void>;
 
-  abstract generateCallbackUrl(apiKeyHash: string, state?: string): Promise<string>;
+  abstract generateCallbackUrl(id: string, state?: string): Promise<string>;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   abstract verify(...args: Array<unknown>): Promise<AuthMethodResponseObject | any>;

@@ -18,9 +18,6 @@ export class ExternalWallet {
 
   @Prop({ default: 0 })
   lastLoginAt: number;
-
-  @Prop({ default: '', required: true })
-  apiKeyId: string;
 }
 
 export type ExternalWalletDocument = ExternalWallet & Document;

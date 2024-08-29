@@ -33,14 +33,14 @@ export class TwitterAuthProvider extends BaseAuthProvider {
   }
 
   async registerCredentials(
-    apiKeyHash: string,
+    id: string,
     consumerKey: string,
     consumerSecret: string,
     oauthCallBack: string,
   ): Promise<void> {
     try {
       await this.oauthClientDataRepository.addOrUpdateClientData({
-        apiKeyHash: apiKeyHash,
+        clientId: id,
         provider: Provider.X,
         credentials: {
           consumerKey: consumerKey as unknown as Mixed,
@@ -54,10 +54,10 @@ export class TwitterAuthProvider extends BaseAuthProvider {
     }
   }
 
-  async generateCallbackUrl(apiKeyHash: string, state?: string): Promise<string> {
+  async generateCallbackUrl(id: string, state?: string): Promise<string> {
     try {
       const clientData = await this.oauthClientDataRepository.findOneByKey(
-        apiKeyHash,
+        id,
         Provider.X,
       );
 
@@ -88,10 +88,10 @@ export class TwitterAuthProvider extends BaseAuthProvider {
     }
   }
 
-  async verify(apiKeyHash: string, xAuthData: XAuthDto): Promise<AuthMethodResponseObject> {
+  async verify(id: string, xAuthData: XAuthDto): Promise<AuthMethodResponseObject> {
     try {
       const xClientSecrets = await this.oauthClientDataRepository.findOneByKey(
-        apiKeyHash,
+        id,
         Provider.X,
       );
 

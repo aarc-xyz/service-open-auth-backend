@@ -75,12 +75,12 @@ export class OpenAuthService {
 
   async addCredentials(
     addAuthProviderDto: AuthProvidersDto,
-    keyHash: string,
+    clientId: string,
   ): Promise<void> {
     try {
       await this.nativeAuthClient.registerCredentials(
         addAuthProviderDto.provider,
-        keyHash,
+        clientId,
         addAuthProviderDto.credentials,
       );
     } catch (error) {
@@ -91,14 +91,14 @@ export class OpenAuthService {
 
   async getClientCallbackUrl(
     provider: Provider,
-    keyHash: string,
+    clientId: string,
     state?: string
   ): Promise<{
     hasNativeAuth: boolean;
     callbackUrl: string;
   }> {
     try {
-      return await this.nativeAuthClient.getCallbackUrl(provider, keyHash, state);
+      return await this.nativeAuthClient.getCallbackUrl(provider, clientId, state);
     } catch (error) {
       this.logger.error('Error in getting client callback url', error);
       throw new ServiceError('Error in getting client callback url', error);
@@ -295,7 +295,6 @@ export class OpenAuthService {
       new Date(sessionKeyDto.expiration),
       userAccountId,
       sessionKeyDto.session_identifier,
-      sessionKeyDto.apiKeyId,
       ethers.utils.computeAddress(pkpPublicAddress),
       accessControlConditions,
     );
@@ -461,7 +460,7 @@ export class OpenAuthService {
 
   async authenticate(
     getPubKeysDto: GetPubKeyDto,
-    apiKeyHash: string,
+    id: string,
     request: Request
   ): Promise<string> {
     try {
@@ -471,19 +470,19 @@ export class OpenAuthService {
       let authMethodResponse: AuthMethodResponseObject;
 
       const hasNativeAuth = await this.nativeAuthClient.hasNativeAuthEnabled(
-       apiKeyHash,
+       id,
        getPubKeysDto.provider,
       )
 
       if (hasNativeAuth) {
         authMethodResponse = await this.nativeAuthClient.verifyRequest(
           getPubKeysDto.provider,
-          apiKeyHash,
+          id,
           getPubKeysDto,
         )
       } else {
         authMethodResponse = await this.platformAuthClient.verifyRequest(
-          apiKeyHash,
+          id,
           getPubKeysDto.provider,
           getPubKeysDto,
           request
@@ -574,7 +573,6 @@ export class OpenAuthService {
           expiration: getPubKeysDto.expiration
             ? getPubKeysDto.expiration
             : Date.now() + 1000 * 60 * 60 * 24,
-          apiKeyId: apiKeyHash,
         },
         accountId,
         pkp.pkpPublicKey,
@@ -606,10 +604,8 @@ export class OpenAuthService {
 
   async pollSessionSigs(
     poll: PollSession,
-    apiKeyhash: string,
   ): Promise<{ wallet_address: string; user: AccountUserData; key: string }> {
     const sessionDoc = await this.sessionsRepository.findOne({
-      apiKeyId: apiKeyhash,
       session_identifier: poll.session_identifier,
     });
     if (sessionDoc) {
@@ -657,7 +653,6 @@ export class OpenAuthService {
 
   async addExternalWallet(
     walletData: ExternalWalletDto,
-    apiKey: string,
   ): Promise<{ address: string; walletType: string }> {
     try {
       const timeStamp = new Date(walletData.message.match(TIMESTAMP_REGEX)[0]);
@@ -705,7 +700,6 @@ export class OpenAuthService {
       }
       const existingAccount = await this.accountsRepository.findExternalWallet({
         address: walletData.address,
-        apiKeyId: apiKey,
       });
       if (existingAccount.length > 0) {
         await this.accountsRepository.updateExternalAccount(existingAccount[0]);
@@ -716,7 +710,6 @@ export class OpenAuthService {
       } else {
         await this.accountsRepository.createExternalWallet(
           walletData.address,
-          apiKey,
           walletData.walletType,
         );
         await this.nonceRepository.addNonce(nonce);

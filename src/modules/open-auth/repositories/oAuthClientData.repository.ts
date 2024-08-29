@@ -18,12 +18,12 @@ export class OAuthClientDataRepository {
   ) {}
 
   async findOneByKey(
-    apiKeyHash: string,
+    id: string,
     provider: Provider,
   ): Promise<OAuthClientDataDocument | null> {
     try {
       const documents = await this.clientDataModel.findOne({
-        apiKeyHash: apiKeyHash,
+        clientId: id,
         provider: provider,
       });
 
@@ -41,7 +41,7 @@ export class OAuthClientDataRepository {
       // Ensure that the entry is unique by the apiKeyHash and provider
       // Delete the existing entry if it exists, considering this is an update request
       await this.clientDataModel.deleteMany({
-        apiKeyHash: data.apiKeyHash,
+        clientId: data.clientId,
         provider: data.provider,
       });
 

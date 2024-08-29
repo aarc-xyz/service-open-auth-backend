@@ -19,7 +19,6 @@ export class SessionKeyDto {
   chainId: number;
 
   expiration: number;
-  apiKeyId: string;
 }
 
 export class PollSession {

@@ -21,13 +21,13 @@ export class GoogleAuthProvider extends BaseAuthProvider {
   }
 
   async registerCredentials(
-    apiKeyHash: string,
+    id: string,
     clientId: string,
     clientSecret: string,
   ): Promise<void> {
     try {
       await this.oAuthClientDataRepository.addOrUpdateClientData({
-        apiKeyHash: apiKeyHash,
+        clientId: id,
         provider: Provider.GOOGLE,
         credentials: {
           clientId: clientId as unknown as Mixed,
@@ -41,10 +41,10 @@ export class GoogleAuthProvider extends BaseAuthProvider {
     }
   }
 
-  async generateCallbackUrl(apiKeyHash: string, state?: string): Promise<string> {
+  async generateCallbackUrl(id: string, state?: string): Promise<string> {
     try {
       const clientData = await this.oAuthClientDataRepository.findOneByKey(
-        apiKeyHash,
+        id,
         Provider.GOOGLE,
       );
       if (!clientData) {

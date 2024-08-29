@@ -15,12 +15,12 @@ export class NativeAuthClient {
   ) {}
 
   async hasNativeAuthEnabled(
-    apiKeyHash: string,
+    id: string,
     provider: Provider,
   ): Promise<boolean> {
     try {
       const client = await this.oauthClientDataRepository.findOneByKey(
-        apiKeyHash,
+        id,
         provider,
       );
       if (!client) {
@@ -41,7 +41,7 @@ export class NativeAuthClient {
 
   async registerCredentials(
     provider: Provider,
-    apiKeyHash: string,
+    id: string,
     credentials: Record<string, unknown>,
   ): Promise<void> {
     try {
@@ -59,7 +59,7 @@ export class NativeAuthClient {
           }
 
           await this.googleAuthProvider.registerCredentials(
-            apiKeyHash,
+            id,
             clientId,
             clientSecret,
           );
@@ -85,7 +85,7 @@ export class NativeAuthClient {
 
   async getCallbackUrl(
     provider: Provider,
-    apiKeyHash: string,
+    id: string,
     state?: string,
   ): Promise<{
     hasNativeAuth: boolean;
@@ -93,7 +93,7 @@ export class NativeAuthClient {
   }> {
     try {
       const hasNativeAuth = await this.hasNativeAuthEnabled(
-        apiKeyHash,
+        id,
         provider,
       );
       if (!hasNativeAuth) {
@@ -106,7 +106,7 @@ export class NativeAuthClient {
       switch (provider) {
         case Provider.GOOGLE: {
           const callbackUrl = await this.googleAuthProvider.generateCallbackUrl(
-            apiKeyHash,
+            id,
           );
           if (!callbackUrl || callbackUrl === '') {
             throw new ServiceError('Error generating callback url');
@@ -140,7 +140,7 @@ export class NativeAuthClient {
 
   async verifyRequest(
     provider: Provider,
-    apiKey: string,
+    id: string,
     params: GetPubKeyDto,
   ): Promise<AuthMethodResponseObject> {
     try {
@@ -161,7 +161,7 @@ export class NativeAuthClient {
               authMethodType: AuthMethodType.Google,
               accessToken: oauth_token,
             },
-            authId: apiKey,
+            authId: id,
             primary_contact: response.email,
             profile_picture_url: response.profile_pic,
             user: {

@@ -20,7 +20,6 @@ export class SessionsRepository {
     expiresAt: Date,
     accountId: string,
     session_identifier: string,
-    apiKeyId: string,
     address: string,
     accessControlConditions: AccessControlConditions,
   ): Promise<SessionsDocument> {
@@ -33,7 +32,6 @@ export class SessionsRepository {
         session_identifier: session_identifier,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        apiKeyId: apiKeyId,
         polled: false,
         wallet_address: address,
         accessControlConditions: accessControlConditions,

@@ -39,9 +39,6 @@ export class Sessions {
   @Prop({ required: true, type: AccessControlConditions })
   accessControlConditions: AccessControlConditions;
 
-  @Prop({ required: true })
-  apiKeyId: string;
-
   @Prop({ default: false })
   polled: boolean;
 

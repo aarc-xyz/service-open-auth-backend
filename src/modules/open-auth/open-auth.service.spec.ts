@@ -1536,7 +1536,7 @@ describe('OpenAuthService', () => {
 	  mockSessionsRepository.findOne.mockResolvedValue(null);
 	  mockApiKeysRepository.findOne.mockResolvedValue(mockApiResponse);
 	  await expect(
-		service.pollSessionSigs(mockParams, 'samlple_api_hash'),
+		service.pollSessionSigs(mockParams),
 	  ).rejects.toThrowError();
 	});
 
@@ -1547,7 +1547,7 @@ describe('OpenAuthService', () => {
 	  });
 	  mockApiKeysRepository.findOne.mockResolvedValue(mockApiResponse);
 	  await expect(
-		service.pollSessionSigs(mockParams, 'samlple_api_hash'),
+		service.pollSessionSigs(mockParams),
 	  ).rejects.toThrowError();
 	});
 
@@ -1563,7 +1563,6 @@ describe('OpenAuthService', () => {
 
 	  const result = await service.pollSessionSigs(
 		mockParams,
-		'samlple_api_hash',
 	  );
 
 	  expect(result).toEqual({
@@ -1589,7 +1588,6 @@ describe('OpenAuthService', () => {
 			walletType: 'Metamask',
 			signature: 'something',
 		  },
-		  'test_api_key',
 		),
 	  ).rejects.toThrowError();
 	});

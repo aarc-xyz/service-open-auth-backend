@@ -26,7 +26,7 @@ export class PlatformAuthClient {
     private readonly webAuthnProvider: WebAuthnProvider
   ) {}
 
-  async verifyRequest(apiKeyHash: string, provider: Provider, params: GetPubKeyDto, request: Request): Promise<AuthMethodResponseObject> {
+  async verifyRequest(id: string, provider: Provider, params: GetPubKeyDto, request: Request): Promise<AuthMethodResponseObject> {
     try {
       switch (provider) {
         case Provider.GOOGLE:
@@ -184,7 +184,7 @@ export class PlatformAuthClient {
             );
           }
 
-         return this.twitterAuthProvider.verify(apiKeyHash, xAuthSession);
+         return this.twitterAuthProvider.verify(id, xAuthSession);
         }
         case Provider.WEBAUTHN: {
           const webAuthnData = params.webauthn_session;

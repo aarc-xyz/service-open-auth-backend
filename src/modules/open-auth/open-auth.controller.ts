@@ -45,8 +45,8 @@ export class OpenAuthController {
     @Res() res: Response,
   ): Promise<Response> {
     try {
-      const keyHash = headers['x-api-key'];
-      await this.openAuthService.addCredentials(addAuthProviderDto, keyHash);
+      const clientId = headers['client-id'];
+      await this.openAuthService.addCredentials(addAuthProviderDto, clientId);
       return res.status(HttpStatus.OK).json({
         code: HttpStatus.OK,
         message: 'success',
@@ -68,11 +68,11 @@ export class OpenAuthController {
     @Res() res: Response,
   ): Promise<Response> {
     try {
-      const keyHash = headers['x-api-key'];
+      const clientId = headers['client-id'];
       const callbackUrl = await this.openAuthService.getClientCallbackUrl(
         params.provider,
         query.state,
-        keyHash,
+        clientId,
       );
       return res.status(HttpStatus.OK).json({
         code: HttpStatus.OK,
@@ -96,10 +96,10 @@ export class OpenAuthController {
     @Res() res: Response,
   ): Promise<Response> {
     try {
-      const keyHash = headers['x-api-key'];
+      const clientId = headers['client-id'];
       const response = await this.openAuthService.authenticate(
         getPubKey,
-        keyHash,
+        clientId,
         req,
       );
       return res.status(HttpStatus.OK).json({
@@ -222,13 +222,11 @@ export class OpenAuthController {
     @Res() res: Response,
   ): Promise<Response> {
     try {
-      const keyHash = headers['x-api-key'];
       const response = await this.openAuthService.pollSessionSigs(
         {
           provider: params.provider,
           session_identifier: params.session_identifier,
         },
-        keyHash,
       );
       return res.status(HttpStatus.OK).json({
         code: HttpStatus.OK,
@@ -255,7 +253,6 @@ export class OpenAuthController {
       const keyHash = headers['x-api-key'];
       const response = await this.openAuthService.addExternalWallet(
         accountData,
-        keyHash,
       );
       return res.status(HttpStatus.OK).json({
         code: HttpStatus.OK,
