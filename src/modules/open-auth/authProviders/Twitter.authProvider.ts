@@ -90,47 +90,40 @@ export class TwitterAuthProvider extends BaseAuthProvider {
 
   async verify(apiKeyHash: string, xAuthData: XAuthDto): Promise<AuthMethodResponseObject> {
     try {
-      const tokenAndSecret = await this.tokenAndSecretRepository.findOneByKey(
-        xAuthData.oauth_token,
-      );
-
-      if (!tokenAndSecret) {
-        throw new ServiceError('Token data not found for the request');
-      }
-
       const xClientSecrets = await this.oauthClientDataRepository.findOneByKey(
         apiKeyHash,
         Provider.X,
       );
 
-      const encryptedXClientKey = xClientSecrets.credentials['consumerKey'] as unknown as string;
-      const encryptedXClientSecret = xClientSecrets.credentials['consumerSecret'] as unknown as string;
-      const encryptedXOAuthCallBack = xClientSecrets.credentials['oauthCallBack'] as unknown as string;
+      let clienSecrets;
+      if (xClientSecrets) {
+        const encryptedXClientKey = xClientSecrets.credentials['consumerKey'] as unknown as string;
+        const encryptedXClientSecret = xClientSecrets.credentials['consumerSecret'] as unknown as string;
+        const encryptedXOAuthCallBack = xClientSecrets.credentials['oauthCallBack'] as unknown as string;
 
-      const xClientKey = decryptData(encryptedXClientKey);
-      const xClientSecret = decryptData(encryptedXClientSecret);
-      const xOAuthCallBack = decryptData(encryptedXOAuthCallBack);
+        const xClientKey = decryptData(encryptedXClientKey);
+        const xClientSecret = decryptData(encryptedXClientSecret);
+        const xOAuthCallBack = decryptData(encryptedXOAuthCallBack);
+
+        clienSecrets = {
+          consumerKey: xClientKey,
+          consumerSecret: xClientSecret,
+          oauthCallback: xOAuthCallBack
+        }
+      }
 
       const accessToken = await this.generateAccessToken(
         xAuthData.oauth_token,
         xAuthData.oauth_verifier,
-        {
-          consumerKey: xClientKey,
-          consumerSecret: xClientSecret,
-          oauthCallback: xOAuthCallBack,
-        }
+        clienSecrets,
       );
 
       const authHeader = this.generateXAuthHeader(
         accessToken.oauth_token,
         accessToken.oauth_token_secret,
         'GET',
-        {},
-        {
-          consumerKey: xClientKey,
-          consumerSecret: xClientSecret,
-          oauthCallback: xOAuthCallBack,
-        }
+        {include_email: true},
+        clienSecrets,
       );
 
       const credentials = await this.getTwitterAccountCredentials(authHeader);
@@ -172,7 +165,7 @@ export class TwitterAuthProvider extends BaseAuthProvider {
     state: string,
     xClientSecrets?: XClientSecrets
   ): Promise<string> {
-    const callbackUrl = `${xClientSecrets.oauthCallback || X_OAUTH_CALLBACK}?state=${state}`;
+    const callbackUrl = xClientSecrets ? xClientSecrets.oauthCallback : `${X_OAUTH_CALLBACK}?state=${state}`;
     const params = { oauth_callback: callbackUrl, ...this.xOAuthParams };
 
     const baseString =
@@ -180,7 +173,7 @@ export class TwitterAuthProvider extends BaseAuthProvider {
       encodeURIComponent(`${X_API_BASE_URL}/oauth/request_token`) +
       '&' +
       encodeURIComponent(qs.stringify(params));
-    const signingKey = encodeURIComponent(xClientSecrets.consumerSecret || X_OAUTH_CONSUMER_SECRET) + '&';
+    const signingKey = encodeURIComponent(xClientSecrets ? xClientSecrets.consumerSecret : X_OAUTH_CONSUMER_SECRET) + '&';
     const oauthSignature = generateHamcSignature(signingKey, baseString);
 
     const authorizationHeader = `OAuth oauth_nonce="${
@@ -191,7 +184,7 @@ export class TwitterAuthProvider extends BaseAuthProvider {
       params.oauth_signature_method
     }", oauth_timestamp="${
       params.oauth_timestamp
-    }", oauth_consumer_key="${xClientSecrets.consumerKey || X_OAUTH_CONSUMER_KEY}", oauth_signature="${encodeURIComponent(
+    }", oauth_consumer_key="${xClientSecrets ? xClientSecrets.consumerKey : X_OAUTH_CONSUMER_KEY}", oauth_signature="${encodeURIComponent(
       oauthSignature,
     )}", oauth_version="${params.oauth_version}"`;
 
@@ -255,12 +248,12 @@ export class TwitterAuthProvider extends BaseAuthProvider {
       '&' +
       encodeURIComponent(qs.stringify(params));
     const signingKey =
-      encodeURIComponent(xClientSecrets.consumerSecret || X_OAUTH_CONSUMER_SECRET) +
+      encodeURIComponent(xClientSecrets ? xClientSecrets.consumerSecret : X_OAUTH_CONSUMER_SECRET) +
       '&' +
       encodeURIComponent(oauthTokenSecret);
     const oauthSignature = generateHamcSignature(signingKey, baseString);
 
-    const authorizationHeader = `OAuth oauth_consumer_key="${xClientSecrets.consumerKey || X_OAUTH_CONSUMER_KEY}", oauth_nonce="${
+    const authorizationHeader = `OAuth oauth_consumer_key="${xClientSecrets ? xClientSecrets.consumerKey : X_OAUTH_CONSUMER_KEY}", oauth_nonce="${
       params.oauth_nonce
     }", oauth_signature="${encodeURIComponent(
       oauthSignature,
@@ -311,31 +304,39 @@ export class TwitterAuthProvider extends BaseAuthProvider {
     profile_picture_url: string;
     name: string;
   }> {
-    const headers = {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: authHeader,
-    };
-    const credentials = await fetch(
-      `${X_API_BASE_URL}/1.1/account/verify_credentials.json?include_email=true`,
-      {
-        method: 'GET',
-        headers: headers,
-      },
-    );
-    if (!credentials.ok) {
-      throw new ServiceError('Failed to get Twitter account credentials');
-    }
-
-    const result = await credentials.json();
-    if (result.email) {
-      const customAuth = customAuthMethod(result.email);
-      return {
-        email: result.email,
-        profile_picture_url: result.profile_image_url_https,
-        name: result.name,
+    try {
+      const headers = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: authHeader,
       };
-    } else {
-      throw new ServiceError('X authentication failed');
+      const credentials = await fetch(
+        `${X_API_BASE_URL}/1.1/account/verify_credentials.json?include_email=true`,
+        {
+          method: 'GET',
+          headers: headers,
+        },
+      );
+      if (!credentials.ok) {
+        // print the error from the body
+        const error = await credentials.text();
+        this.logger.error('Failed to get Twitter account credentials', error);
+        throw new ServiceError('Failed to get Twitter account credentials');
+      }
+
+      const result = await credentials.json();
+      if (result.email) {
+        const customAuth = customAuthMethod(result.email);
+        return {
+          email: result.email,
+          profile_picture_url: result.profile_image_url_https,
+          name: result.name,
+        };
+      } else {
+        throw new ServiceError('X authentication failed');
+      }
+    } catch (error) {
+      this.logger.error('Failed to get Twitter account credentials', error);
+      throw new ServiceError('Failed to get Twitter account credentials');
     }
   }
 
@@ -348,10 +349,10 @@ export class TwitterAuthProvider extends BaseAuthProvider {
   ): string {
     try {
       const headerParams = {
-        oauth_consumer_key: xClientSecrets.consumerKey || X_OAUTH_CONSUMER_KEY,
+        oauth_consumer_key: xClientSecrets ? xClientSecrets.consumerKey : X_OAUTH_CONSUMER_KEY,
         oauth_nonce: btoa(ethers.utils.id(`${Math.random}`)),
         oauth_signature_method: X_OAUTH_SIGNATURE_METHOD,
-        oauth_timestamp: Date.now() / 1000,
+        oauth_timestamp: Math.floor(Date.now() / 1000),
         oauth_token: xauth_token,
         oauth_version: X_OAUTH_VERSION,
       };
@@ -384,7 +385,7 @@ export class TwitterAuthProvider extends BaseAuthProvider {
         )}`;
 
       const signing_key = `${encodeURIComponent(
-        xClientSecrets.consumerSecret || X_OAUTH_CONSUMER_SECRET,
+        xClientSecrets ? xClientSecrets.consumerSecret : X_OAUTH_CONSUMER_SECRET,
       )}&${xauth_secret}`;
 
       const signature: string = generateHamcSignature(

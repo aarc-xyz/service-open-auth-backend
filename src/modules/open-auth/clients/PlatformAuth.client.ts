@@ -55,10 +55,6 @@ export class PlatformAuthClient {
             throw new BadRequestException('Invalid request, Missing code');
           }
 
-          if (!params.phone_number) {
-            throw new BadRequestException('Invalid request, Missing phone_number');
-          }
-
           const sessionResponse = await this.stytchClient.validateEmailOTP(
             params.code,
             params.method_id,

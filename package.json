@@ -20,11 +20,11 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
-    "@lit-protocol/auth-helpers": "^6.4.0",
-    "@lit-protocol/contracts-sdk": "^6.4.0",
-    "@lit-protocol/lit-auth-client": "^6.4.0",
-    "@lit-protocol/lit-node-client": "^6.4.0",
-    "@lit-protocol/pkp-ethers": "^6.4.0",
+    "@lit-protocol/auth-helpers": "^6.4.6",
+    "@lit-protocol/contracts-sdk": "^6.4.6",
+    "@lit-protocol/lit-auth-client": "^6.4.6",
+    "@lit-protocol/lit-node-client": "^6.4.6",
+    "@lit-protocol/pkp-ethers": "^6.4.6",
     "@nestjs/common": "^10.0.0",
     "@nestjs/core": "^10.0.0",
     "@nestjs/mongoose": "^10.0.10",
