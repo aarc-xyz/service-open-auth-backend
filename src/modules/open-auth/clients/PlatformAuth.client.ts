@@ -187,7 +187,7 @@ export class PlatformAuthClient {
          return this.twitterAuthProvider.verify(id, xAuthSession);
         }
         case Provider.WEBAUTHN: {
-          const webAuthnData = params.webauthn_session;
+          const webAuthnData = params.webauthn;
           if (!webAuthnData) {
             throw new ServiceError('Webauthn data not passed');
           }

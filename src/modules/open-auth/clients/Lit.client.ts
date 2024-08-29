@@ -310,7 +310,8 @@ export class LitClient {
         case Provider.FARCASTER:
         case Provider.X:
         case Provider.SMS:
-        case Provider.TELEGRAM: {
+        case Provider.TELEGRAM:
+        case Provider.WEBAUTHN: {
           mintPayload = {
             permittedIpfsCIDs: [permittedLitAction],
             permittedIpfsCIDScopes: [[AuthMethodScope.SignAnything]],

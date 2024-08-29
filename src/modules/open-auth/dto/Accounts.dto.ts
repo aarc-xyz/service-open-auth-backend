@@ -115,7 +115,7 @@ export class GetPubKeyDto {
 
   telegram_session?: TelegramAuthDto;
 
-  webauthn_session?: AuthenticateWebAuthnDto;
+  webauthn?: AuthenticateWebAuthnDto;
 }
 
 export class ValidateOTPDto {

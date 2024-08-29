@@ -188,7 +188,7 @@ export class WebAuthnProvider extends BaseAuthProvider {
       );
       return passKey.primary_contact;
     } catch (error) {
-      this.logger.error('Error verifying authentication', error.message);
+      this.logger.error('Error verifying webauthn authentication', error.message);
     }
   }
 }
