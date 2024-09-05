@@ -18,6 +18,7 @@ A backend service for OpenAuth, providing necessary APIs for user registration, 
     - [Required Variables](#required-variables)
     - [Blockchain RPC URLs](#blockchain-rpc-urls)
   - [Contributing](#contributing)
+  - [License](#license)
 
 ## Overview
 
@@ -126,3 +127,7 @@ Obtain free RPC URLs from providers like Ankr. Required for various blockchain n
 We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) for details on how you can help improve the Service Open Auth Backend.
 
 For more detailed information or support, please reach out through our [Discord](https://discord.gg/3kFCfBgSdY) or [Telegram](https://t.me/aarcxyz) channels.
+
+## License
+
+This project is licensed under the Apache License, Version 2.0. See the [LICENSE](LICENSE) file for more details.
